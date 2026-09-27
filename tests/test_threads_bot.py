@@ -24,7 +24,9 @@ def test_persona_issues_block_links_ads_and_human_claims():
     assert persona.issues(GOOD, needs_question=True) == []
     assert persona.issues('오늘 굴에서 뒹굴뒹굴 🐰', needs_question=False) == []
     assert any('질문' in i for i in persona.issues('오늘 굴에서 뒹굴뒹굴 🐰', needs_question=True))
-    assert any('사람' in i for i in persona.issues('20대 여자인 나도 출근길엔 졸려?', needs_question=True))
+    assert any('사람' in i for i in persona.issues('30대 여자인 나도 월요일엔 졸려?', needs_question=True))
+    assert persona.issues('당근 회사 출근길… 월급날까지 버티자 🐰', needs_question=False) == []  # 토끼 세계 직장 이야기는 허용
+    assert any('투자' in i for i in persona.issues('요즘 코인 수익률 봤어?', needs_question=True))
     assert any('광고' in i for i in persona.issues('이 당근 할인 링크 https://x.com #당근', needs_question=False))
     assert all(not persona.issues(t, needs_question=False) for t in persona.FALLBACKS)
 
@@ -35,11 +37,11 @@ def test_compose_uses_slot_mood_and_recent_posts():
     draft = compose.compose(llm, MODELS, past, SLOT)
     assert draft.parts == (GOOD,) and draft.key == f'persona:{SLOT}' and not draft.rescued
     sent = client.requests[0]['input']
-    assert channel.MOODS['12:30'] in sent and '이불 밖은 위험해' in sent
+    assert channel.MOODS['12:30'] in sent and '주말이라' in sent and '이불 밖은 위험해' in sent  # 2026-09-27은 일요일
 
 
 def test_compose_falls_back_to_prepared_post():
-    bad = PersonaPost(text='남친이랑 출근길 https://x.com')
+    bad = PersonaPost(text='30대 여자인 나 https://x.com')
     llm, _ = fake_llm({'PersonaPost': [bad, bad]})
     draft = compose.compose(llm, MODELS, (), SLOT)
     assert draft.rescued and draft.parts[0] in persona.FALLBACKS
@@ -86,7 +88,7 @@ def test_run_post_publishes_single_post_once():
 
 
 def test_run_post_marks_prepared_post():
-    bad = PersonaPost(text='남친이랑 출근길')
+    bad = PersonaPost(text='30대 여자인 나')
     d, _ = deps({'PersonaPost': [bad, bad]})
     assert post.run_post(ENV, d, None, AT_1235).outcome == 'success'
     assert post.RESCUED_NOTE in history.find(history.load_history(), SLOT).note
