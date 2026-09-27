@@ -30,7 +30,15 @@ FORMATS = (
     ('가벼운 질문: 팔로워가 한 줄로 답할 수 있는 질문', True),
     ('밸런스 게임: A vs B 고르기', True),
     ('짧은 한 줄 감성: 기분·날씨·계절을 한 문장으로 (질문 없이)', False),
+    ('시리즈 "오늘의 낮잠 점수": 오늘 낮잠(또는 잠)을 10점 만점으로 채점하고 한 줄 평 (질문 없이)', False),
+    ('시리즈 "하루의 당근 일기": 오늘의 당근 이야기를 한두 줄 일기처럼 (질문 없이)', False),
 )
+# 요일 테마 (월=0). 공감 포인트를 요일마다 다르게.
+WEEKDAY_THEMES = ('월요병, 다시 시작하는 한 주', '아직 화요일이라니', '한 주의 반, 수요일 고비', '금요일 전날의 설렘',
+                  '불금 설렘, 주말 계획', '늘어지는 토요일, 늦잠', '일요일 오후의 아쉬움, 내일 걱정')
+# 특별한 날 (MM-DD)
+SPECIAL_DAYS = {'11-30': '하루 생일! 굴 친구들에게 축하받는 날', '12-24': '크리스마스 이브', '12-25': '크리스마스',
+                '12-31': '한 해 마지막 날', '01-01': '새해 첫날', '02-14': '밸런타인데이', '10-31': '핼러윈'}
 BANNED = ('http', 'www.', '#', '구매', '할인', '링크', '광고', '협찬', '쿠팡', '무조건', '100%')
 # 실제 사람인 척하는 표현 (AI 표시를 하지 않는 대신 반드시 막는다)
 HUMAN_CLAIMS = re.compile(
@@ -51,7 +59,9 @@ class PersonaPost(BaseModel):
 
 def context_line(now: datetime, slot_time: str) -> str:
     mood = MOODS.get(slot_time, '평범한 하루')
-    return f'지금: {now:%m월 %d일} {WEEKDAYS[now.weekday()]}요일 {slot_time}, {SEASONS[now.month]}\n이 시간 분위기: {mood}'
+    special = SPECIAL_DAYS.get(f'{now:%m-%d}')
+    return (f'지금: {now:%m월 %d일} {WEEKDAYS[now.weekday()]}요일 {slot_time}, {SEASONS[now.month]}\n이 시간 분위기: {mood}\n'
+            f'요일 테마: {WEEKDAY_THEMES[now.weekday()]}' + (f'\n오늘은 특별한 날: {special}' if special else ''))
 
 
 def issues(text: str, needs_question: bool) -> list[str]:
