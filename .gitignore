@@ -1,0 +1,17 @@
+# 비밀 정보 (절대 커밋 금지)
+.env
+*.token
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+output/
+*.tmp
+.DS_Store
+
+# 토큰이 적힌 메모 (절대 커밋 금지)
+*키.md
+*주소.md
