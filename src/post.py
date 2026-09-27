@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from src import channel, compose, guard, history, notifier, schedule, state
+from src import channel, compose, guard, history, image, notifier, schedule, state
 from src.guard import RunResult
 from src.llm import LLMClient, LLMError
 from src.providers import TextBackend
@@ -28,6 +28,7 @@ class PostDeps:
     models: compose.Models
     client: ThreadsClient
     tg_get: Callable[..., Any] | None = None
+    make_image: Callable[[str, str], str] | None = None   # (장면, 슬롯) → 그림 공개 주소. src/image.py
 
 
 def _stamp(now: datetime) -> str:
@@ -51,12 +52,28 @@ def publish_replies(client: ThreadsClient, parent_id: str, replies: tuple[str, .
     return ''
 
 
+def attach_image(deps: PostDeps, draft: compose.Draft, key: str) -> str:
+    """그림 슬롯이면 그림을 만들어 주소를 반환합니다. 실패하면 빈 문자열(글만 게시)."""
+    if deps.make_image is None or key[-5:] not in channel.IMAGE_TIMES or not draft.scene:
+        return ''
+    try:
+        url = deps.make_image(draft.scene, key)
+        print(f'[그림] {url}')
+        return url
+    except image.ImageError as e:
+        print(f'[그림 실패] 글만 게시합니다: {e}')
+        return ''
+
+
 def post_slot(key: str, deps: PostDeps, llm: LLMClient, past: tuple[history.HistoryEntry, ...],
               now: datetime) -> history.HistoryEntry:
     draft = compose.compose(llm, deps.models, past, key)
-    container = deps.client.create_text(draft.parts[0])
+    image_url = attach_image(deps, draft, key)
+    container = (deps.client.create_image(draft.parts[0], image_url) if image_url
+                 else deps.client.create_text(draft.parts[0]))
     entry = history.HistoryEntry(slot=key, status=PUBLISHING, title=draft.title, seed=draft.kind,
                                  doc_id=draft.key, source_url=draft.source_url, caption=draft.text,
+                                 image_urls=(image_url,) if image_url else (),
                                  note=RESCUED_NOTE if draft.rescued else '', updated_at=_stamp(now))
     history.save_history(history.upsert(past, entry))
     deps.client.wait_before_publish()

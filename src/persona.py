@@ -55,6 +55,7 @@ FALLBACKS = (
 
 class PersonaPost(BaseModel):
     text: str = Field(description="하루의 Threads 글 한 개, 10~150자")
+    scene: str = Field(default='', description='이 글에 어울리는 그림 장면을 영어 한두 문장으로 (토끼 하루가 무엇을 하는지, 배경·소품)')
 
 
 def context_line(now: datetime, slot_time: str) -> str:
@@ -79,8 +80,11 @@ def issues(text: str, needs_question: bool) -> list[str]:
     return found
 
 
-def compose_persona(llm: LLMClient, model: str, history: Sequence[HistoryEntry], slot: str) -> tuple[str, bool]:
-    """(글, 준비된 글을 썼는지)를 반환합니다. slot은 '2026-09-27T12:30' 형식."""
+FALLBACK_SCENE = 'Haru is curled up asleep in a straw blanket, hugging a carrot, in a cozy burrow.'
+
+
+def compose_persona(llm: LLMClient, model: str, history: Sequence[HistoryEntry], slot: str) -> tuple[str, bool, str]:
+    """(글, 준비된 글을 썼는지, 그림 장면)을 반환합니다. slot은 '2026-09-27T12:30' 형식."""
     from src import schedule
 
     now = schedule.slot_datetime(slot)
@@ -91,10 +95,11 @@ def compose_persona(llm: LLMClient, model: str, history: Sequence[HistoryEntry],
     feedback: list[str] = []
     for attempt in range(1, MAX_ATTEMPTS + 1):
         extra = ('\n\n이전 글이 검수에서 떨어졌어. 고쳐서 다시 써:\n' + '\n'.join(f'- {f}' for f in feedback)) if feedback else ''
-        text = llm.parse(model, load_prompt('persona'), user_input + extra, PersonaPost).text.strip()
+        result = llm.parse(model, load_prompt('persona'), user_input + extra, PersonaPost)
+        text = result.text.strip()
         feedback = issues(text, needs_question)
         if not feedback:
             print(f'[하루 글 통과] 시도 {attempt} ({fmt.split(":")[0]})')
-            return text, False
+            return text, False, result.scene.strip() or FALLBACK_SCENE
         print(f'[하루 글 탈락] 시도 {attempt}: ' + ' / '.join(feedback))
-    return random.Random(slot).choice(FALLBACKS), True
+    return random.Random(slot).choice(FALLBACKS), True, FALLBACK_SCENE

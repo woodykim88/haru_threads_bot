@@ -4,3 +4,4 @@ anthropic>=0.70
 google-genai>=1.30
 pydantic>=2.7
 requests>=2.32
+boto3>=1.35

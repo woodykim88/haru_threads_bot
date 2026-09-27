@@ -18,7 +18,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src import channel, compose, history, notifier, post, providers, runlog, schedule, token_refresh, usage
+from src import channel, compose, history, image, notifier, post, providers, runlog, schedule, token_refresh, usage
 from src.guard import RunResult
 from src.llm import LLMClient, LLMError
 from src.threads import ThreadsClient, ThreadsConfigError, ThreadsError, load_threads_config
@@ -60,6 +60,7 @@ def run_job(job: str, env: Mapping[str, str], ai: providers.AISettings | None,
         backend=providers.build_text_backend(ai.text_provider, env),
         models=compose.Models(ai.writer_model, ai.fast_model),
         client=ThreadsClient(load_threads_config(env)),
+        make_image=lambda scene, slot: image.make_image(env, scene, slot),
     )
     return post.run_post(env, deps, telegram, datetime.now(timezone.utc))
 

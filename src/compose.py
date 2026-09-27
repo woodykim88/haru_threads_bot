@@ -27,6 +27,7 @@ class Draft:
     source_url: str = ''
     kind: str = persona.KIND
     rescued: bool = False     # AI 글이 검수에 떨어져 준비된 글을 쓴 경우
+    scene: str = ''           # 그림 장면 (IMAGE_TIMES 슬롯에서만 그린다)
 
     @property
     def text(self) -> str:
@@ -34,5 +35,5 @@ class Draft:
 
 
 def compose(llm: LLMClient, models: Models, history: Sequence[HistoryEntry], slot: str) -> Draft:
-    text, canned = persona.compose_persona(llm, models.writer, history, slot)
-    return Draft(f'{persona.KIND}:{slot}', text.splitlines()[0][:40], (text,), rescued=canned)
+    text, canned, scene = persona.compose_persona(llm, models.writer, history, slot)
+    return Draft(f'{persona.KIND}:{slot}', text.splitlines()[0][:40], (text,), rescued=canned, scene=scene)

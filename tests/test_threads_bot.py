@@ -128,3 +128,60 @@ def test_post_pending_publishes_saved_draft_once(tmp_path):
     c, _ = client(OK_ROUTES)
     assert post.run_pending(c, None, AT_1235, path).outcome == 'success' and not path.exists()
     assert state.load_state().paused is False
+
+
+# --- 그림 (20:00 슬롯) ---
+
+import base64  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+from src import image  # noqa: E402
+
+R2_ENV = {'R2_ACCOUNT_ID': 'a', 'R2_ACCESS_KEY_ID': 'k', 'R2_SECRET_ACCESS_KEY': 's', 'R2_BUCKET': 'b',
+          'R2_PUBLIC_BASE_URL': 'https://pub.example/'}
+AT_2005 = AT_1235.replace(hour=11, minute=5)   # KST 20:05
+
+
+class FakeImages:
+    def __init__(self):
+        self.calls = []
+
+    def edit(self, **kwargs):
+        self.calls.append(kwargs)
+        return SimpleNamespace(data=[SimpleNamespace(b64_json=base64.b64encode(b'jpg').decode())], usage=None)
+
+
+class FakeS3:
+    def __init__(self):
+        self.puts = []
+
+    def put_object(self, **kwargs):
+        self.puts.append(kwargs)
+
+
+def test_make_image_uses_reference_and_uploads():
+    images, s3 = FakeImages(), FakeS3()
+    url = image.make_image(R2_ENV, 'Haru eating a carrot', '2026-09-27T20:00', SimpleNamespace(images=images), s3)
+    assert url.startswith('https://pub.example/threads-haru/2026/09/2026-09-27T2000-') and url.endswith('.jpg')
+    assert images.calls[0]['model'] == 'gpt-image-2' and 'Haru eating a carrot' in images.calls[0]['prompt']
+    assert s3.puts[0]['Body'] == b'jpg' and s3.puts[0]['ContentType'] == 'image/jpeg'
+    with pytest.raises(image.ImageError):
+        image.make_image({}, 'x', '2026-09-27T20:00')
+
+
+def test_image_slot_posts_image_and_text_slot_does_not():
+    d, graph = deps({'PersonaPost': [PersonaPost(text=GOOD, scene='Haru at dinner')]})
+    d = post.PostDeps(d.backend, d.models, d.client, make_image=lambda scene, slot: f'https://pub/{slot}.jpg')
+    post.run_post(ENV, d, None, AT_2005)
+    creates = [p for m, u, p in graph.calls if u.endswith('/threads')]
+    assert creates[0]['media_type'] == 'IMAGE' and creates[0]['image_url'] == 'https://pub/2026-09-27T20:00.jpg'
+    assert history.find(history.load_history(), '2026-09-27T20:00').image_urls == ('https://pub/2026-09-27T20:00.jpg',)
+
+
+def test_image_failure_falls_back_to_text():
+    def broken(scene, slot):
+        raise image.ImageError('boom')
+    d, graph = deps({'PersonaPost': [PersonaPost(text=GOOD, scene='Haru')]})
+    d = post.PostDeps(d.backend, d.models, d.client, make_image=broken)
+    assert post.run_post(ENV, d, None, AT_2005).outcome == 'success'
+    assert [p['media_type'] for m, u, p in graph.calls if u.endswith('/threads')] == ['TEXT']

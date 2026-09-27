@@ -97,6 +97,16 @@ class ThreadsClient:
             raise ThreadsError('Threads 컨테이너 id가 없습니다.')
         return str(data['id'])
 
+    def create_image(self, text: str, image_url: str) -> str:
+        """그림 + 글 컨테이너를 만듭니다. image_url은 공개 주소여야 합니다."""
+        if len(text) > MAX_TEXT_CHARS:
+            raise ThreadsError(f'Threads 글은 {MAX_TEXT_CHARS}자까지입니다 (현재 {len(text)}자).')
+        data = self._call('POST', f'{self._config.user_id}/threads',
+                          {'media_type': 'IMAGE', 'image_url': image_url, 'text': text})
+        if not data.get('id'):
+            raise ThreadsError('Threads 컨테이너 id가 없습니다.')
+        return str(data['id'])
+
     def publish(self, creation_id: str) -> str:
         """재시도하지 않는다 (서버에선 성공했는데 응답만 실패하면 두 번 올라갈 수 있음)."""
         data = self._call('POST', f'{self._config.user_id}/threads_publish', {'creation_id': creation_id})
