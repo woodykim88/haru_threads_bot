@@ -250,3 +250,15 @@ def test_replies_respect_daily_limit(tmp_path):
 def test_reply_issues_block_human_claims_and_links():
     assert replies.reply_issues('헤헤 고마워 🥕') == []
     assert replies.reply_issues('30대 여자인 나도 그래 https://x.com')
+
+
+def test_balance_game_rules_and_slot_formats():
+    good = '월급날 앞두고 고민 중…\nA. 월급 두 배 + 퇴근 후 연락 필수\nB. 월급 그대로 + 퇴근 뒤 잠수 가능\n굴 친구들은?'
+    assert persona.balance_issues(good) == []
+    assert any('A. / B.' in i for i in persona.balance_issues('회의 10분 vs 퇴근 10분?'))
+    assert any('고르지' in i for i in persona.balance_issues(good + '\n난 B'))
+    assert any('예시' in i for i in persona.balance_issues('고민\nA. 연봉 30% 인상\nB. 그대로\n굴 친구들은?'))
+    monday = schedule.slot_datetime('2026-09-28T12:30')
+    assert persona.pick_format(monday, '2026-09-28T12:30') in persona.SLOT_FORMATS['12:30']
+    sunday = schedule.slot_datetime('2026-09-27T16:00')
+    assert persona.pick_format(sunday, '2026-09-27T16:00') in persona.WEEKEND_FORMATS

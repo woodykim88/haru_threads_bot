@@ -24,16 +24,26 @@ RECENT = 15
 WEEKDAYS = '월화수목금토일'
 SEASONS = {12: '겨울', 1: '겨울', 2: '겨울', 3: '봄', 4: '봄', 5: '봄', 6: '여름', 7: '여름', 8: '여름',
            9: '가을', 10: '가을', 11: '가을'}
-FORMATS = (
-    ('혼잣말 일상: 지금 하루가 하고 있는 일을 짧게 (질문 없이)', False),
-    ('공감 한 줄: "이거 나만 그래?" 류의 공감 포인트', True),
-    ('가벼운 질문: 팔로워가 한 줄로 답할 수 있는 질문', True),
-    ('밸런스 게임: A vs B 고르기', True),
-    ('짧은 한 줄 감성: 기분·날씨·계절을 한 문장으로 (질문 없이)', False),
-    ('시리즈 "오늘의 퇴사 충동 지수": 오늘 회사에서 느낀 퇴사 충동을 10점 만점으로 채점하고 한 줄 평 (질문 없이)', False),
-    ('시리즈 "하루의 당근 일기": 오늘의 일·돈·마음 이야기를 당근에 빗대 한두 줄 일기처럼 (질문 없이)', False),
-    ('고민 공감: 30대가 할 법한 연애·결혼·인생·돈 고민 하나를 토끼 세계로 털어놓고 한 줄 위로', False),
-)
+# 형식: (설명, 질문 필요, 밸런스 게임 여부). 2026-09-28 사용자 피드백으로 시간대마다 역할을 나눴다.
+BALANCE = ('밸런스 게임: 둘 다 달콤하거나 둘 다 괴로워서 진짜 고민되는 30대 딜레마(돈·연애·결혼·회사·명절). '
+           '첫 줄에 상황 한 줄, 다음 줄에 "A. …" "B. …"를 따로 쓰고, 하루는 답을 고르지 말고 "굴 친구들은?"으로 넘겨', True, True)
+CHECKLIST = ('체크리스트 퀴즈: "3개 이상이면 ○○" 형식으로 공감 항목 4~5개를 줄마다 짧게 (예: 번아웃·월급 루팡·연애 세포 실종 체크)', True, False)
+BLANK = ('빈칸 채우기: "월급날 나는 ___ 한다"처럼 누구나 한 줄로 채울 수 있는 빈칸 하나 + 하루의 귀여운 예시 답', True, False)
+TYPE_TEST = ('유형 테스트: "퇴사 충동이 올 때 나는?" 같은 질문에 1~3번 선택지를 짧게, 굴 친구들에게 번호로 답하게', True, False)
+SLOT_FORMATS = {
+    '09:00': (('한숨 공감 한 줄: 출근 전 아침의 콕 집히는 장면 하나 (질문 없이 짧게)', False, False),
+              ('"이거 나만 그래?" 아침 공감: 출근 준비의 구체적 장면 + 짧은 질문', True, False)),
+    '12:30': (BALANCE, BALANCE, CHECKLIST, BLANK, TYPE_TEST),
+    '16:00': (('회사 에피소드: 조연(부엉이 부장·다람쥐 동기 등)이 나오는 오늘의 짧은 사건 한 장면 + 하루의 속마음 (질문 없이)', False, False),
+              ('시리즈 "오늘의 퇴사 충동 지수": 오늘 회사에서 있었던 구체적 사건으로 10점 만점 채점 + 한 줄 평 (질문 없이)', False, False)),
+    '20:00': (('오늘 버틴 나 위로: 퇴근 후 작은 보상 장면 + 굴 친구들에게 건네는 따뜻한 한마디 (질문 없이)', False, False),
+              ('시리즈 "하루의 당근 일기": 오늘의 일·돈·마음을 한두 줄 일기처럼 (질문 없이)', False, False)),
+    '23:30': (('밤의 속마음: 연애·결혼·돈·인생 고민 하나를 구체적 장면으로 털어놓고 스스로 다독이기 (질문 없이)', False, False),
+              ('밤의 속마음 + 질문: 연애·결혼·돈 고민 하나를 털어놓고 굴 친구들에게 조심스럽게 묻기', True, False)),
+}
+# prompts/persona.md의 밸런스 게임 예시 (그대로 베끼면 탈락)
+PROMPT_EXAMPLES = ('연봉 30% 인상', '3년 연애 금지', '3년 월급 동결', '10번 듣기')
+WEEKEND_FORMATS = (BALANCE, BLANK, ('주말 공감: 늘어짐·약속·일요일 밤 출근 걱정 중 하나를 구체적 장면으로 (질문 없이)', False, False))
 # 요일 테마 (월=0). 공감 포인트를 요일마다 다르게.
 WEEKDAY_THEMES = ('월요병, 출근이 세상에서 제일 싫은 날', '아직 화요일이라니, 주말이 너무 멀다', '수요일 고비, 반은 왔다',
                   '목요일, 금요일만 보고 버티기', '불금, 칼퇴와 주말 계획', '늘어지는 토요일, 늦잠과 약속 사이',
@@ -89,6 +99,26 @@ def issues(text: str, needs_question: bool) -> list[str]:
     return found
 
 
+def pick_format(now: datetime, slot: str) -> tuple[str, bool, bool]:
+    """시간대 역할에 맞는 형식을 고릅니다. 주말은 회사 장면 대신 주말 형식 (12:30은 계속 참여형)."""
+    options = SLOT_FORMATS.get(slot[-5:], SLOT_FORMATS['20:00'])
+    if now.weekday() >= 5 and slot[-5:] != '12:30':
+        options = WEEKEND_FORMATS
+    return random.Random(slot).choice(options)
+
+
+def balance_issues(text: str) -> list[str]:
+    """밸런스 게임은 A/B가 한눈에 보이고, 하루가 답을 정하지 않아야 한다."""
+    found = []
+    if not (re.search(r'(^|\n)\s*A[.)]', text) and re.search(r'\n\s*B[.)]', text)):
+        found.append('A. / B. 선택지를 줄을 나눠 쓰세요.')
+    if any(example in text for example in PROMPT_EXAMPLES):
+        found.append('프롬프트의 예시를 그대로 쓰지 말고 새 딜레마를 만드세요.')
+    if re.search(r'(난|나는|하루는)\s*(무조건\s*)?(A|B|전자|후자)', text):
+        found.append('하루가 답을 고르지 말고 굴 친구들에게 넘기세요.')
+    return found
+
+
 FALLBACK_SCENE = 'Haru is curled up asleep in a straw blanket, hugging a carrot, in a cozy burrow.'
 
 
@@ -97,7 +127,7 @@ def compose_persona(llm: LLMClient, model: str, history: Sequence[HistoryEntry],
     from src import schedule
 
     now = schedule.slot_datetime(slot)
-    fmt, needs_question = random.Random(slot).choice(FORMATS)
+    fmt, needs_question, is_balance = pick_format(now, slot)
     recent = [e.caption for e in history if e.seed == KIND and e.caption][-RECENT:]
     user_input = (f'{context_line(now, slot[-5:])}\n이번 형식: {fmt}\n'
                   '최근에 올린 글 (겹치지 않게):\n' + ('\n'.join(f'- {t}' for t in recent) or '(없음)'))
@@ -106,7 +136,7 @@ def compose_persona(llm: LLMClient, model: str, history: Sequence[HistoryEntry],
         extra = ('\n\n이전 글이 검수에서 떨어졌어. 고쳐서 다시 써:\n' + '\n'.join(f'- {f}' for f in feedback)) if feedback else ''
         result = llm.parse(model, load_prompt('persona'), user_input + extra, PersonaPost)
         text = result.text.strip()
-        feedback = issues(text, needs_question)
+        feedback = issues(text, needs_question) + (balance_issues(text) if is_balance else [])
         if not feedback:
             print(f'[하루 글 통과] 시도 {attempt} ({fmt.split(":")[0]})')
             return text, False, result.scene.strip() or FALLBACK_SCENE
