@@ -18,8 +18,16 @@ class LLMError(Exception):
     """LLM 호출 실패 또는 상한 초과."""
 
 
+# 글쓰기 프롬프트에는 우리 채널 최근 성과(잘 된 글·안 된 글, src/performance.py가 매일 갱신)를 붙인다
+WRITING_PROMPTS = frozenset({'writer', 'product', 'general', 'casual', 'persona'})
+PERFORMANCE_PATH = PROMPTS_DIR.parent / 'data' / 'performance.md'
+
+
 def load_prompt(name: str) -> str:
-    return (PROMPTS_DIR / f'{name}.md').read_text(encoding='utf-8')
+    text = (PROMPTS_DIR / f'{name}.md').read_text(encoding='utf-8')
+    if name in WRITING_PROMPTS and PERFORMANCE_PATH.exists():
+        text += PERFORMANCE_PATH.read_text(encoding='utf-8')
+    return text
 
 
 class LLMClient:

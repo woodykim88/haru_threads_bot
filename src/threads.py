@@ -87,6 +87,14 @@ class ThreadsClient:
             raise _error(response)
         return _json(response)
 
+    @property
+    def user_id(self) -> str:
+        return self._config.user_id
+
+    def get(self, path: str, params: Mapping[str, str] | None = None) -> dict[str, Any]:
+        """읽기 전용 호출 (내 글 목록·인사이트·댓글)."""
+        return self._call('GET', path, params)
+
     def create_text(self, text: str, reply_to: str = '') -> str:
         """텍스트 컨테이너를 만듭니다. reply_to를 주면 그 글에 이어지는 답글이 됩니다."""
         if len(text) > MAX_TEXT_CHARS:

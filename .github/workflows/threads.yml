@@ -11,7 +11,7 @@ on:
       job:
         description: 'post=지금 게시할 슬롯 게시 / preview=글만 만들기(게시 안 함) / refresh-token=토큰 갱신 / post-pending=미리 보여 준 글 그대로 게시'
         type: choice
-        options: [preview, post, refresh-token, post-pending]
+        options: [preview, post, refresh-token, post-pending, insights]
         default: preview
 
 concurrency:

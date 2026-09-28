@@ -4,6 +4,7 @@
     post           슬롯 시각이 되면 캐릭터 글을 만들어 바로 게시 (하루 5번)
     preview        게시하지 않고 글만 만들어 output/preview.txt에 저장 (--slot 으로 시간대 지정, 여러 개 가능)
     refresh-token  Threads 장기 토큰 갱신 (주 1회)
+    insights       최근 글 조회수를 읽어 글쓰기 참고(data/performance.md) 갱신 (하루 1번, AI 호출 없음)
     post-pending   미리 보여 준 글(data/pending.json)을 그대로 게시 (--save-pending으로 만든 것)
 """
 from __future__ import annotations
@@ -18,13 +19,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src import channel, compose, history, image, notifier, post, providers, runlog, schedule, token_refresh, usage
+from src import channel, compose, history, image, notifier, performance, post, providers, runlog, schedule, token_refresh, usage
 from src.guard import RunResult
 from src.llm import LLMClient, LLMError
 from src.threads import ThreadsClient, ThreadsConfigError, ThreadsError, load_threads_config
 
 ROOT = Path(__file__).resolve().parent.parent
-JOBS = ('post', 'preview', 'refresh-token', 'post-pending')
+JOBS = ('post', 'preview', 'refresh-token', 'post-pending', 'insights')
 PREVIEW_PATH = ROOT / 'output' / 'preview.txt'
 KNOWN_ERRORS = (providers.ProviderConfigError, ThreadsConfigError, ThreadsError, schedule.ScheduleError,
                 compose.PipelineError, LLMError)
@@ -52,6 +53,8 @@ def run_job(job: str, env: Mapping[str, str], ai: providers.AISettings | None,
             telegram: notifier.TelegramConfig | None, slots: Sequence[str] = (), pending_slot: str = '') -> RunResult:
     if job == 'preview':
         return run_preview(env, ai, slots, pending_slot)
+    if job == 'insights':
+        return performance.run_insights(ThreadsClient(load_threads_config(env)), datetime.now(schedule.KST))
     if job == 'refresh-token':
         return token_refresh.run_refresh(env, telegram)
     if job == 'post-pending':
