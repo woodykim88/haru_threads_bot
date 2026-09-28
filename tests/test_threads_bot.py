@@ -23,11 +23,13 @@ def test_channel_config_has_five_slots_and_prefix():
 
 def test_persona_issues_block_links_ads_and_human_claims():
     assert persona.issues(GOOD, needs_question=True) == []
-    assert persona.issues('오늘 굴에서 뒹굴뒹굴 🐰', needs_question=False) == []
-    assert any('질문' in i for i in persona.issues('오늘 굴에서 뒹굴뒹굴 🐰', needs_question=True))
+    assert persona.issues('오늘 집에서 뒹굴뒹굴 🐰', needs_question=False) == []
+    assert any('질문' in i for i in persona.issues('오늘 집에서 뒹굴뒹굴 🐰', needs_question=True))
     assert any('사람' in i for i in persona.issues('30대 여자인 나도 월요일엔 졸려?', needs_question=True))
     assert persona.issues('당근 회사 출근길… 월급날까지 버티자 🐰', needs_question=False) == []  # 토끼 세계 직장 이야기는 허용
     assert any('투자' in i for i in persona.issues('요즘 코인 수익률 봤어?', needs_question=True))
+    assert any('집' in i for i in persona.issues('퇴근하고 굴에 누웠어', needs_question=False))
+    assert persona.issues('주말엔 집에서 뒹굴뒹굴, 얼굴 팩도 했어', needs_question=False) == []
     assert any('광고' in i for i in persona.issues('이 당근 할인 링크 https://x.com #당근', needs_question=False))
     assert all(not persona.issues(t, needs_question=False) for t in persona.FALLBACKS)
 
@@ -228,11 +230,11 @@ class ReplyClient:
 def test_replies_answer_new_comments_once_and_skip_identity_questions(tmp_path):
     path = tmp_path / 'replied.json'
     now = datetime(2026, 9, 28, 5, 0, tzinfo=timezone.utc)
-    llm, _ = fake_llm({'ReplyDraft': [ReplyDraft(skip=False, reply='헤헤 고마워 굴 친구 🥕'),
+    llm, _ = fake_llm({'ReplyDraft': [ReplyDraft(skip=False, reply='헤헤 고마워 친구 🥕'),
                                       ReplyDraft(skip=True, reason='정체 질문')]})
     client = ReplyClient()
     r = replies.run_replies(client, llm, 'f', None, now, path)
-    assert r.outcome == 'success' and client.created == [('헤헤 고마워 굴 친구 🥕', 'c1')]
+    assert r.outcome == 'success' and client.created == [('헤헤 고마워 친구 🥕', 'c1')]
     assert set(replies.load_replied(path)['ids']) == {'c1', 'c2'} and replies.load_replied(path)['days']['2026-09-28'] == 1
     llm2, openai2 = fake_llm({})
     replies.run_replies(client, llm2, 'f', None, now, path)
@@ -253,11 +255,11 @@ def test_reply_issues_block_human_claims_and_links():
 
 
 def test_balance_game_rules_and_slot_formats():
-    good = '월급날 앞두고 고민 중…\nA. 월급 두 배 + 퇴근 후 연락 필수\nB. 월급 그대로 + 퇴근 뒤 잠수 가능\n굴 친구들은?'
+    good = '월급날 앞두고 고민 중…\nA. 월급 두 배 + 퇴근 후 연락 필수\nB. 월급 그대로 + 퇴근 뒤 잠수 가능\n친구들은?'
     assert persona.balance_issues(good) == []
     assert any('A. / B.' in i for i in persona.balance_issues('회의 10분 vs 퇴근 10분?'))
     assert any('고르지' in i for i in persona.balance_issues(good + '\n난 B'))
-    assert any('예시' in i for i in persona.balance_issues('고민\nA. 연봉 30% 인상\nB. 그대로\n굴 친구들은?'))
+    assert any('예시' in i for i in persona.balance_issues('고민\nA. 연봉 30% 인상\nB. 그대로\n친구들은?'))
     monday = schedule.slot_datetime('2026-09-28T12:30')
     assert persona.pick_format(monday, '2026-09-28T12:30') in persona.SLOT_FORMATS['12:30']
     sunday = schedule.slot_datetime('2026-09-27T16:00')
