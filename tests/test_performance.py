@@ -32,3 +32,13 @@ def test_build_brief_lists_top_and_bottom():
     brief = performance.build_brief(stats, '2026-09-28')
     assert '조회 50회' in brief.split('반응이 적었던')[0] and '조회 0회' in brief.split('반응이 적었던')[1]
     assert performance.build_brief(stats[:3], '2026-09-28') == ''
+
+
+def test_reference_examples_pick_blocks_and_skip_guides(tmp_path):
+    from src import llm
+    path = tmp_path / '참고글.md'
+    path.write_text('# 제목\n> 안내\n\n---\n첫 번째 글\n---\n두 번째 글\n', encoding='utf-8')
+    text = llm.reference_examples(path, pick=5)
+    assert '첫 번째 글' in text and '두 번째 글' in text and '안내' not in text
+    path.write_text('# 제목만\n> 안내\n---\n', encoding='utf-8')
+    assert llm.reference_examples(path) == '' and llm.reference_examples(tmp_path / 'none.md') == ''

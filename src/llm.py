@@ -1,6 +1,7 @@
 """구조화 응답 호출 래퍼. AI 회사와 무관하게 호출 횟수에 상한을 둔다(비용 폭주 방지)."""
 from __future__ import annotations
 
+import random
 from pathlib import Path
 from typing import TypeVar
 
@@ -23,10 +24,33 @@ WRITING_PROMPTS = frozenset({'writer', 'product', 'general', 'casual', 'persona'
 PERFORMANCE_PATH = PROMPTS_DIR.parent / 'data' / 'performance.md'
 
 
+# 사용자가 직접 모아 둔 다른 계정의 잘 된 글 (저장소 맨 위 참고글.md, --- 로 구분). 글마다 몇 개만 골라 말투 참고로 붙인다.
+REFERENCE_PATH = PROMPTS_DIR.parent / '참고글.md'
+REFERENCE_PICK = 3
+
+
+def reference_examples(path: Path = REFERENCE_PATH, pick: int = REFERENCE_PICK) -> str:
+    """참고글이 없으면 빈 문자열. 제목(#)·안내(>) 줄은 빼고, 글 단위로 pick개를 무작위로 고른다."""
+    try:
+        raw = path.read_text(encoding='utf-8')
+    except OSError:
+        return ''
+    blocks = ['\n'.join(ln for ln in b.strip().splitlines() if not ln.startswith(('#', '>'))).strip()
+              for b in raw.split('\n---')]
+    examples = [b for b in blocks if b]
+    if not examples:
+        return ''
+    chosen = random.sample(examples, min(pick, len(examples)))
+    return ('\n\n## 다른 계정의 반응 좋았던 글 (말투·호흡·구성만 참고해. 문장·소재·경험담은 절대 베끼지 마)\n'
+            + '\n'.join(f'예시 {i}:\n{e}\n' for i, e in enumerate(chosen, 1)))
+
+
 def load_prompt(name: str) -> str:
     text = (PROMPTS_DIR / f'{name}.md').read_text(encoding='utf-8')
-    if name in WRITING_PROMPTS and PERFORMANCE_PATH.exists():
-        text += PERFORMANCE_PATH.read_text(encoding='utf-8')
+    if name in WRITING_PROMPTS:
+        if PERFORMANCE_PATH.exists():
+            text += PERFORMANCE_PATH.read_text(encoding='utf-8')
+        text += reference_examples()
     return text
 
 
