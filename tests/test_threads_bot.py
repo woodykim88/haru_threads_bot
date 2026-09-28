@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone
 
 from scripts import due_check
 from src import channel, commands, compose, history, notifier, persona, post, schedule, state, threads, token_refresh
@@ -187,3 +188,65 @@ def test_image_failure_falls_back_to_text():
     d = post.PostDeps(d.backend, d.models, d.client, make_image=broken)
     assert post.run_post(ENV, d, None, AT_2005).outcome == 'success'
     assert [p['media_type'] for m, u, p in graph.calls if u.endswith('/threads')] == ['TEXT']
+
+
+# --- 댓글 자동 답글 ---
+
+from src import replies  # noqa: E402
+from src.replies import ReplyDraft  # noqa: E402
+
+
+class ReplyClient:
+    user_id = 'u1'
+
+    def __init__(self):
+        self.created, self.published = [], []
+
+    def get(self, path, params=None):
+        if path == 'u1/threads':
+            return {'data': [{'id': 'p1', 'text': '월요병 밸런스 게임', 'timestamp': '2026-09-28T01:00:00+0000',
+                              'is_reply': False}]}
+        return {'data': [
+            {'id': 'c1', 'text': '프사 귀엽네요ㅎㅎ', 'username': 'fan1', 'timestamp': '2026-09-28T02:00:00+0000'},
+            {'id': 'c2', 'text': 'AI 봇이죠?', 'username': 'fan2', 'timestamp': '2026-09-28T03:00:00+0000'},
+            {'id': 'c3', 'text': '내 답글', 'username': 'rabbit.haru1130', 'timestamp': '2026-09-28T03:00:00+0000',
+             'is_reply_owned_by_me': True},
+        ]}
+
+    def create_text(self, text, reply_to=''):
+        self.created.append((text, reply_to))
+        return 'box'
+
+    def wait_before_publish(self):
+        pass
+
+    def publish(self, box):
+        self.published.append(box)
+        return 'm'
+
+
+def test_replies_answer_new_comments_once_and_skip_identity_questions(tmp_path):
+    path = tmp_path / 'replied.json'
+    now = datetime(2026, 9, 28, 5, 0, tzinfo=timezone.utc)
+    llm, _ = fake_llm({'ReplyDraft': [ReplyDraft(skip=False, reply='헤헤 고마워 굴 친구 🥕'),
+                                      ReplyDraft(skip=True, reason='정체 질문')]})
+    client = ReplyClient()
+    r = replies.run_replies(client, llm, 'f', None, now, path)
+    assert r.outcome == 'success' and client.created == [('헤헤 고마워 굴 친구 🥕', 'c1')]
+    assert set(replies.load_replied(path)['ids']) == {'c1', 'c2'} and replies.load_replied(path)['days']['2026-09-28'] == 1
+    llm2, openai2 = fake_llm({})
+    replies.run_replies(client, llm2, 'f', None, now, path)
+    assert openai2.requests == [] and len(client.created) == 1   # 같은 댓글에 두 번 답하지 않음
+
+
+def test_replies_respect_daily_limit(tmp_path):
+    path = tmp_path / 'replied.json'
+    replies.save_replied({'ids': [], 'days': {'2026-09-28': replies.MAX_PER_DAY}}, path)
+    llm, _ = fake_llm({})
+    r = replies.run_replies(ReplyClient(), llm, 'f', None, datetime(2026, 9, 28, 5, 0, tzinfo=timezone.utc), path)
+    assert r.outcome == 'skipped'
+
+
+def test_reply_issues_block_human_claims_and_links():
+    assert replies.reply_issues('헤헤 고마워 🥕') == []
+    assert replies.reply_issues('30대 여자인 나도 그래 https://x.com')

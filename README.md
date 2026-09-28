@@ -5,6 +5,8 @@
 - 뉴스·제품·링크 없음. 20:00 글에는 프로필 그림(assets/haru_ref.jpg)을 기준으로 그린 하루 그림 1장을 붙입니다 (src/image.py, gpt-image-2, R2 threads-haru/). 그림이 실패하면 글만 올립니다. 시간대별 분위기(src/channel.py MOODS)와 형식(혼잣말·공감·질문·밸런스 게임·감성 한 줄)을 돌려 가며 씁니다.
 - AI 표시는 하지 않는 대신, 하루는 끝까지 토끼 캐릭터로만 말합니다. 실제 사람처럼 보이는 표현(20대 여자, 남친, 출근길 등)은 검수에서 막습니다 (src/persona.py).
 - 검수에 두 번 떨어지면 준비된 캐릭터 글로 올립니다 (회차를 건너뛰지 않음, 텔레그램에 ⚠️).
+- 댓글 자동 답글: 2시간마다 새 댓글에 하루 말투로 답합니다 (src/replies.py, 한 번 5개·하루 20개 한도, 욕설·스팸·"AI야?" 같은 정체 질문은 건너뜀).
+- 성과 반영: 매일 조회수 상위·하위 글을 글쓰기 참고로 넣습니다 (src/performance.py, AI 호출 없음).
 - 텔레그램: 같은 봇, `[Threads 하루]`, 명령 `/haru_stop` `/haru_skip` `/haru_resume`
 - 정시 실행: `~/Projects/인스타피드 건강뉴스 자동화/scheduler` (Cloudflare 정시 알람). GitHub cron은 예비.
 
