@@ -32,6 +32,9 @@ def test_persona_issues_block_links_ads_and_human_claims():
     assert persona.issues('주말엔 집에서 뒹굴뒹굴, 얼굴 팩도 했어', needs_question=False) == []
     assert any('광고' in i for i in persona.issues('이 당근 할인 링크 https://x.com #당근', needs_question=False))
     assert all(not persona.issues(t, needs_question=False) for t in persona.FALLBACKS)
+    for hhmm, texts in persona.SLOT_FALLBACKS.items():  # 12:30·20:00 준비된 글도 형식(마지막 줄 질문)에 맞아야 한다
+        assert all(not persona.issues(t, needs_question=True) and not persona.ending_issues(t) for t in texts), hhmm
+    assert any('조건부' in i for i in persona.issues('리포스트하면 다음 편 올려 줄게?', needs_question=True))
 
 
 def test_compose_uses_slot_mood_and_recent_posts():
@@ -47,7 +50,7 @@ def test_compose_falls_back_to_prepared_post():
     bad = PersonaPost(text='30대 여자인 나 https://x.com')
     llm, _ = fake_llm({'PersonaPost': [bad, bad]})
     draft = compose.compose(llm, MODELS, (), SLOT)
-    assert draft.rescued and draft.parts[0] in persona.FALLBACKS
+    assert draft.rescued and draft.parts[0] in persona.SLOT_FALLBACKS['12:30'] and '?' in draft.parts[0]
 
 
 # --- Threads API · 게시 ---
@@ -264,3 +267,56 @@ def test_balance_game_rules_and_slot_formats():
     assert persona.pick_format(monday, '2026-09-28T12:30') in persona.SLOT_FORMATS['12:30']
     sunday = schedule.slot_datetime('2026-09-27T16:00')
     assert persona.pick_format(sunday, '2026-09-27T16:00') in persona.WEEKEND_FORMATS
+
+
+# --- 2026-10-03 성과 반영: 12:30 조연 점심 장면, 20:00 "이거 나만 그래?" 저녁 장면, 16:00·23:30 공유 줄 ---
+
+def test_lunch_and_evening_formats_end_with_question():
+    for key in ('2026-10-05T12:30', '2026-10-04T12:30', '2026-10-05T20:00', '2026-10-04T20:00'):  # 월요일·일요일
+        fmt, needs_question, is_balance = persona.pick_format(schedule.slot_datetime(key), key)
+        assert fmt in [f[0] for f in persona.SLOT_FORMATS[key[-5:]]] and needs_question and not is_balance
+    lunch = ' '.join(f[0] for f in persona.SLOT_FORMATS['12:30'])
+    assert '다람쥐 동기' in lunch and '부엉이 부장' in lunch and not any(w in lunch for w in ('빈칸', '체크리스트', 'A.'))
+    assert all('나만 그래' in f[0] or '질문' in f[0] for f in persona.SLOT_FORMATS['20:00'])
+    assert '20:00' in channel.IMAGE_TIMES  # 그림은 20:00 그대로
+    assert persona.ending_issues('퇴근하고 바로 누웠어\n이거 나만 그래?') == []
+    assert persona.ending_issues('이거 나만 그래?\n퇴근하고 바로 누웠어')
+
+
+def test_evening_compose_retries_when_question_not_last():
+    first = PersonaPost(text='다들 퇴근했어?\n난 집 오자마자 누웠어 🐰')
+    good = PersonaPost(text='집 오자마자 가방 멘 채로 누웠어 🐰\n이거 나만 그래?')
+    llm, client = fake_llm({'PersonaPost': [first, good]})
+    draft = compose.compose(llm, MODELS, (), '2026-10-05T20:00')
+    assert draft.parts == (good.text,) and not draft.rescued and len(client.requests) == 2
+
+
+def test_share_line_rotates_daily_between_16_and_2330():
+    days = [f'2026-10-{d:02d}' for d in range(3, 9)]
+    for day in days:
+        flags = [persona.wants_share_line(f'{day}T{t}') for t in persona.SHARE_SLOTS]
+        assert flags.count(True) == 1  # 하루 한 번, 두 시각을 번갈아
+    assert [persona.wants_share_line(f'{d}T16:00') for d in days[:4]] in ([True, False, True, False], [False, True, False, True])
+    assert not any(persona.wants_share_line(f'2026-10-03T{t}') for t in ('09:00', '12:30', '20:00'))
+
+
+def test_share_line_keeps_question_last_and_has_no_conditional_bait():
+    key = next(f'2026-10-{d:02d}T23:30' for d in range(3, 10) if persona.wants_share_line(f'2026-10-{d:02d}T23:30'))
+    out = persona.with_share_line('잠이 안 와…\n다들 아직 안 자?', key)
+    lines = out.splitlines()
+    assert lines[-1] == '다들 아직 안 자?' and lines[-2] in persona.SHARE_LINES
+    flat = persona.with_share_line('부엉이 부장이 또 불렀어 🐰', key)
+    assert flat.splitlines()[-1] in persona.SHARE_LINES
+    assert all(not persona.ENGAGEMENT_BAIT.search(t) and not persona.issues(t, needs_question=False) for t in persona.SHARE_LINES)
+    assert persona.strip_share_lines(out) == '잠이 안 와…\n다들 아직 안 자?'
+    off = key.replace('T23:30', 'T16:00')
+    assert persona.with_share_line('그냥 글', off) == '그냥 글'
+
+
+def test_compose_appends_share_line_after_quality_check():
+    key = next(f'2026-10-{d:02d}T16:00' for d in range(3, 10) if persona.wants_share_line(f'2026-10-{d:02d}T16:00'))
+    text = '부엉이 부장이 "잠깐 얘기 좀 할까?" 하고 10분 동안 당근 얘기만 했어 🐰'
+    llm, _ = fake_llm({'PersonaPost': [PersonaPost(text=text)]})
+    draft = compose.compose(llm, MODELS, (), key)
+    assert draft.parts[0].startswith(text) and draft.parts[0].splitlines()[-1] in persona.SHARE_LINES
+    assert draft.title == text[:40]
