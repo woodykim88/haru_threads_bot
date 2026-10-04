@@ -13,6 +13,14 @@ on:
         type: choice
         options: [preview, post, refresh-token, post-pending, insights, reply]
         default: preview
+      slot:
+        description: 'preview 전용: 만들 시간대 HH:MM (비우면 오늘 전체)'
+        type: string
+        default: ''
+      pending_slot:
+        description: 'preview 전용: 만든 글을 data/pending.json에 저장할 새 슬롯 키 (예 2026-10-04T18:30). 이어서 post-pending으로 게시'
+        type: string
+        default: ''
 
 concurrency:
   group: threads
@@ -82,7 +90,13 @@ jobs:
           TEXT_PROVIDER: ${{ vars.TEXT_PROVIDER }}
           WRITER_MODEL: ${{ vars.WRITER_MODEL }}
           FAST_MODEL: ${{ vars.FAST_MODEL }}
-        run: python -m src.main --job ${{ steps.pick.outputs.job }}
+          INPUT_SLOT: ${{ inputs.slot }}
+          INPUT_PENDING_SLOT: ${{ inputs.pending_slot }}
+        run: |
+          ARGS=""
+          [ -n "$INPUT_SLOT" ] && ARGS="$ARGS --slot $INPUT_SLOT"
+          [ -n "$INPUT_PENDING_SLOT" ] && ARGS="$ARGS --save-pending $INPUT_PENDING_SLOT"
+          python -m src.main --job ${{ steps.pick.outputs.job }} $ARGS
 
       - name: Upload preview
         if: always() && steps.pick.outputs.job == 'preview'
@@ -94,7 +108,7 @@ jobs:
           retention-days: 14
 
       - name: Commit records
-        if: always() && steps.due.outputs.due != 'false' && steps.pick.outputs.job != 'preview'
+        if: always() && steps.due.outputs.due != 'false' && (steps.pick.outputs.job != 'preview' || inputs.pending_slot != '')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
