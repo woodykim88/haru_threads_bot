@@ -15,6 +15,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from src import kr_calendar
 from src.channel import MOODS
 from src.history import HistoryEntry
 from src.llm import LLMClient, load_prompt
@@ -54,7 +55,7 @@ SLOT_FORMATS = {
 ENDS_WITH_QUESTION = ('12:30', '20:00')
 # prompts/persona.md의 밸런스 게임 예시 (그대로 베끼면 탈락)
 PROMPT_EXAMPLES = ('연봉 30% 인상', '3년 연애 금지', '3년 월급 동결', '10번 듣기')
-WEEKEND_FORMATS = (BALANCE, ('"이거 나만 그래?" 주말 공감: 늦잠·약속·일요일 밤 출근 걱정 중 하나를 구체적 장면으로 + 짧은 질문', True, False), ('주말 공감: 늘어짐·약속·일요일 밤 출근 걱정 중 하나를 구체적 장면으로 (질문 없이)', False, False))
+WEEKEND_FORMATS = (BALANCE, ('"이거 나만 그래?" 주말 공감: 늦잠·약속·늘어짐 중 하나를 (내일 출근하는 날일 때만 일요일 밤 출근 걱정도 가능) 구체적 장면으로 + 짧은 질문', True, False), ('주말 공감: 늘어짐·약속 중 하나를 (내일 출근하는 날일 때만 일요일 밤 출근 걱정도 가능) 구체적 장면으로 (질문 없이)', False, False))
 # 요일 테마 (월=0). 공감 포인트를 요일마다 다르게.
 WEEKDAY_THEMES = ('월요병, 출근이 세상에서 제일 싫은 날', '아직 화요일이라니, 주말이 너무 멀다', '수요일 고비, 반은 왔다',
                   '목요일, 금요일만 보고 버티기', '불금, 칼퇴와 주말 계획', '늘어지는 토요일, 늦잠과 약속 사이',
@@ -112,11 +113,15 @@ class PersonaPost(BaseModel):
 
 def context_line(now: datetime, slot_time: str) -> str:
     mood = MOODS.get(slot_time, '평범한 하루')
-    if now.weekday() >= 5:  # 주말엔 회사 장면 대신 늘어짐·약속·일요일 밤 출근 걱정
-        mood = f'주말이라 회사는 안 가 (이 시간대 원래 분위기는 참고만: {mood})'
+    off = kr_calendar.is_day_off(now.date())
+    if off:  # 주말·공휴일엔 회사 장면 대신 늘어짐·약속 (내일 출근이면 그 걱정도 가능)
+        why = '주말' if now.weekday() >= 5 else '공휴일'
+        mood = f'{why}이라 쉬는 날, 회사는 안 가 (이 시간대 원래 분위기는 참고만: {mood})'
     special = SPECIAL_DAYS.get(f'{now:%m-%d}')
+    theme = '쉬는 날 (아래 달력 사실을 따라)' if off and now.weekday() < 5 else WEEKDAY_THEMES[now.weekday()]
     return (f'지금: {now:%m월 %d일} {WEEKDAYS[now.weekday()]}요일 {slot_time}, {SEASONS[now.month]}\n이 시간 분위기: {mood}\n'
-            f'요일 테마: {WEEKDAY_THEMES[now.weekday()]}' + (f'\n오늘은 특별한 날: {special}' if special else ''))
+            f'요일 테마: {theme}\n달력 사실(대한민국 공휴일 반영, 어기지 마): {kr_calendar.describe(now.date())}'
+            + (f'\n오늘은 특별한 날: {special}' if special else ''))
 
 
 def issues(text: str, needs_question: bool) -> list[str]:
@@ -153,7 +158,7 @@ def ending_issues(text: str) -> list[str]:
 def pick_format(now: datetime, slot: str) -> tuple[str, bool, bool]:
     """시간대 역할에 맞는 형식을 고릅니다. 주말은 회사 장면 대신 주말 형식 (12:30·20:00은 주말에도 같은 형식)."""
     options = SLOT_FORMATS.get(slot[-5:], SLOT_FORMATS['20:00'])
-    if now.weekday() >= 5 and slot[-5:] not in ENDS_WITH_QUESTION:
+    if kr_calendar.is_day_off(now.date()) and slot[-5:] not in ENDS_WITH_QUESTION:
         options = WEEKEND_FORMATS
     return random.Random(slot).choice(options)
 
@@ -211,7 +216,7 @@ def compose_persona(llm: LLMClient, model: str, history: Sequence[HistoryEntry],
         extra = ('\n\n이전 글이 검수에서 떨어졌어. 고쳐서 다시 써:\n' + '\n'.join(f'- {f}' for f in feedback)) if feedback else ''
         result = llm.parse(model, load_prompt('persona'), user_input + extra, PersonaPost)
         text = result.text.strip()
-        feedback = (issues(text, needs_question) + (balance_issues(text) if is_balance else [])
+        feedback = (issues(text, needs_question) + kr_calendar.commute_issues(text, now.date()) + (balance_issues(text) if is_balance else [])
                     + (ending_issues(text) if slot[-5:] in ENDS_WITH_QUESTION else []))
         if not feedback:
             print(f'[하루 글 통과] 시도 {attempt} ({fmt.split(":")[0]})')
