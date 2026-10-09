@@ -177,7 +177,8 @@ def test_make_image_uses_reference_and_uploads():
         image.make_image({}, 'x', '2026-09-27T20:00')
 
 
-def test_image_slot_posts_image_and_text_slot_does_not():
+def test_image_slot_posts_image_and_text_slot_does_not(monkeypatch):
+    monkeypatch.setattr(channel, 'IMAGE_TIMES', ('20:00',))  # 2026-10-10부터 기본은 그림 없음. 켰을 때의 동작을 본다
     d, graph = deps({'PersonaPost': [PersonaPost(text=GOOD, scene='Haru at dinner')]})
     d = post.PostDeps(d.backend, d.models, d.client, make_image=lambda scene, slot: f'https://pub/{slot}.jpg')
     post.run_post(ENV, d, None, AT_2005)
@@ -278,7 +279,7 @@ def test_lunch_and_evening_formats_end_with_question():
     lunch = ' '.join(f[0] for f in persona.SLOT_FORMATS['12:30'])
     assert '다람쥐 동기' in lunch and '부엉이 부장' in lunch and not any(w in lunch for w in ('빈칸', '체크리스트', 'A.'))
     assert all('나만 그래' in f[0] or '질문' in f[0] for f in persona.SLOT_FORMATS['20:00'])
-    assert '20:00' in channel.IMAGE_TIMES  # 그림은 20:00 그대로
+    assert channel.IMAGE_TIMES == ()  # 2026-10-10: 그림 글 조회수가 글만 올린 글의 1/3 이하라 끔
     assert persona.ending_issues('퇴근하고 바로 누웠어\n이거 나만 그래?') == []
     assert persona.ending_issues('이거 나만 그래?\n퇴근하고 바로 누웠어')
 

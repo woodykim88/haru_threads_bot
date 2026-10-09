@@ -20,3 +20,5 @@ python -m pytest -q
 python -m src.main --job preview              # 오늘 5개 시간대 글 미리보기 (게시 안 함)
 python -m src.main --job preview --slot 23:30 # 한 시간대만
 ```
+
+- 2026-10-10 개편 (팔로워 6~15명, 글당 조회 중앙값 50~120회): 첫 글에 토픽 태그 1개를 붙인다 (`TOPIC_TAG`, `src/threads.py`). 태그 때문에 거절되면 태그 없이 다시 만든다.

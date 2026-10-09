@@ -11,6 +11,8 @@ from __future__ import annotations
 NAME = '하루'
 HANDLE = 'rabbit.haru1130'
 CMD_PREFIX = 'haru'  # 텔레그램 명령: /haru_stop /haru_skip /haru_resume
+# 첫 글에 붙이는 토픽 태그 (2026-10-10, 글당 1개만 가능). 토픽 피드·검색에 걸리게 하려는 것. 비우면 안 붙인다.
+TOPIC_TAG = '직장인'
 
 # 게시 시각(KST)별 역할 (2026-09-28 개편, 2026-10-03 성과 반영으로 12:30·20:00 변경). 형식은 src/persona.py SLOT_FORMATS.
 MOODS = {
@@ -22,4 +24,4 @@ MOODS = {
 }
 DEFAULT_TIMES = ','.join(MOODS)
 # 그림을 붙이는 시각 (2026-09-27 사용자 결정: 하루 1장, 20:00). src/image.py
-IMAGE_TIMES = ('20:00',)
+IMAGE_TIMES: tuple[str, ...] = ()  # 2026-10-10 끔: 그림 붙인 20:00 글 5편이 조회 21~40회, 같은 기간 글만 올린 글 중앙값 약 120회

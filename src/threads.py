@@ -70,6 +70,13 @@ def _json(response: requests.Response) -> dict[str, Any]:
     return data
 
 
+def _topic_tag() -> str:
+    """채널 토픽 태그 (2026-10-10: 팔로워가 10명대라 토픽 피드·검색 노출을 얻으려고 첫 글에 붙인다). 1~50자, 마침표·& 불가."""
+    from src import channel  # 채널 설정이 없는 테스트에서도 이 모듈을 쓸 수 있게 늦게 읽는다
+    tag = str(getattr(channel, 'TOPIC_TAG', '') or '').strip()
+    return tag if 1 <= len(tag) <= 50 and '.' not in tag and '&' not in tag else ''
+
+
 class ThreadsClient:
     def __init__(self, config: ThreadsConfig, request: Request = _default_request,
                  sleep: Callable[[float], None] = time.sleep) -> None:
@@ -95,12 +102,25 @@ class ThreadsClient:
         """읽기 전용 호출 (내 글 목록·인사이트·댓글)."""
         return self._call('GET', path, params)
 
+    def _create(self, params: Mapping[str, str], tagged: bool) -> dict[str, Any]:
+        """컨테이너 만들기. 첫 글에는 토픽 태그를 붙이고, 태그 때문에 거절되면 태그 없이 한 번 더 만든다 (아직 공개 전이라 안전)."""
+        path = f'{self._config.user_id}/threads'
+        tag = _topic_tag() if tagged else ''
+        if tag:
+            try:
+                return self._call('POST', path, {**params, 'topic_tag': tag})
+            except ThreadsError as e:
+                if e.fatal:
+                    raise
+                print(f'[토픽 태그 실패] 태그 없이 다시 만듭니다: {e}')
+        return self._call('POST', path, params)
+
     def create_text(self, text: str, reply_to: str = '') -> str:
         """텍스트 컨테이너를 만듭니다. reply_to를 주면 그 글에 이어지는 답글이 됩니다."""
         if len(text) > MAX_TEXT_CHARS:
             raise ThreadsError(f'Threads 글은 {MAX_TEXT_CHARS}자까지입니다 (현재 {len(text)}자).')
         params = {'media_type': 'TEXT', 'text': text, **({'reply_to_id': reply_to} if reply_to else {})}
-        data = self._call('POST', f'{self._config.user_id}/threads', params)
+        data = self._create(params, tagged=not reply_to)
         if not data.get('id'):
             raise ThreadsError('Threads 컨테이너 id가 없습니다.')
         return str(data['id'])
@@ -109,8 +129,7 @@ class ThreadsClient:
         """그림 + 글 컨테이너를 만듭니다. image_url은 공개 주소여야 합니다."""
         if len(text) > MAX_TEXT_CHARS:
             raise ThreadsError(f'Threads 글은 {MAX_TEXT_CHARS}자까지입니다 (현재 {len(text)}자).')
-        data = self._call('POST', f'{self._config.user_id}/threads',
-                          {'media_type': 'IMAGE', 'image_url': image_url, 'text': text})
+        data = self._create({'media_type': 'IMAGE', 'image_url': image_url, 'text': text}, tagged=True)
         if not data.get('id'):
             raise ThreadsError('Threads 컨테이너 id가 없습니다.')
         return str(data['id'])
