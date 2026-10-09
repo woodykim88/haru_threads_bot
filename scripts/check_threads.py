@@ -1,5 +1,5 @@
 """Threads 토큰 확인 + 사용자 ID 자동 기록. 토큰 값은 화면에 출력하지 않는다.
-사용법: "../구글블로그 AI뉴스 소식 자동화/.venv/bin/python" scripts/check_threads.py
+사용법: "../../블로그/구글블로그-AI뉴스/.venv/bin/python" scripts/check_threads.py
 """
 from __future__ import annotations
 
