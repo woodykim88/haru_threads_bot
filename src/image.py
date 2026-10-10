@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from src import usage
+from src.openai_fallback import to_image_format
 
 REFERENCE = Path(__file__).resolve().parent.parent / 'assets' / 'haru_ref.jpg'
 MODEL = 'gpt-image-2'
@@ -66,7 +67,7 @@ def draw(client: Any, scene: str) -> bytes:
     data = response.data[0].b64_json if response.data else None
     if not data:
         raise ImageError('그림 응답이 비어 있습니다.')
-    return base64.b64decode(data)
+    return to_image_format(base64.b64decode(data), 'jpeg')
 
 
 def upload(config: R2Config, key: str, body: bytes, s3: Any = None) -> str:
@@ -86,9 +87,9 @@ def make_image(env: Mapping[str, str], scene: str, slot: str, client: Any = None
     config = load_r2_config(env)
     try:
         if client is None:
-            from openai import OpenAI
+            from src.openai_fallback import make_openai
 
-            client = OpenAI(api_key=env.get('OPENAI_API_KEY', ''))
+            client = make_openai(env)
         body = draw(client, scene)
         return upload(config, object_key(slot), body, s3)
     except ImageError:

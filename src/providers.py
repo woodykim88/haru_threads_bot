@@ -110,8 +110,8 @@ class GeminiTextBackend:
 def build_text_backend(provider: str, env: Mapping[str, str]) -> TextBackend:
     key = api_key(env, provider)
     if provider == 'openai':
-        from openai import OpenAI
-        return OpenAITextBackend(OpenAI(api_key=key))
+        from src.openai_fallback import make_openai
+        return OpenAITextBackend(make_openai(env))
     if provider == 'anthropic':
         from anthropic import Anthropic
         return AnthropicTextBackend(Anthropic(api_key=key))

@@ -11,7 +11,7 @@ from dotenv import dotenv_values
 ROOT = Path(__file__).resolve().parent.parent
 FALLBACKS = (ROOT.parent.parent / '인스타' / '인스타피드-건강뉴스' / '.env', ROOT.parent.parent / '블로그' / '구글블로그-AI뉴스' / '.env')
 OWN_KEYS = ('THREADS_USER_ID', 'THREADS_ACCESS_TOKEN')
-SHARED_KEYS = ('OPENAI_API_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'GH_SECRETS_PAT',
+SHARED_KEYS = ('OPENAI_API_KEY', 'GPTPROTO_API_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'GH_SECRETS_PAT',
                'R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET', 'R2_PUBLIC_BASE_URL')
 
 
