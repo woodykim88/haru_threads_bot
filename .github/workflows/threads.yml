@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      PUBLISH_TIMES: ${{ vars.PUBLISH_TIMES || '09:00,12:30,16:00,20:00,23:30' }}
+      PUBLISH_TIMES: ${{ vars.PUBLISH_TIMES || '09:00,12:30,16:00,23:30' }}
       PAUSED: ${{ vars.PAUSED || 'false' }}
     steps:
       - uses: actions/checkout@v4

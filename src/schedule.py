@@ -9,8 +9,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 KST = timezone(timedelta(hours=9), 'KST')
-MAX_POSTS_PER_DAY = 5  # 하루 채널은 5번 (2026-09-27 사용자 결정)
-DEFAULT_TIMES = '09:00,12:30,16:00,20:00,23:30'
+MAX_POSTS_PER_DAY = 5  # 하루 채널 상한. 2026-10-11부터 4번 (20:00 중앙값 35라 뺌)
+DEFAULT_TIMES = '09:00,12:30,16:00,23:30'
 # .github/workflows/cardnews.yml의 cron이 맞춰져 있는 발행 시각. PUBLISH_TIMES를 바꾸면 cron도 바꿔야 한다.
 CRON_TIMES = ((8, 0), (20, 0))
 LEAD_HOURS = 7          # 발행 7시간 전부터 준비 (02:07 → 08:00 슬롯)

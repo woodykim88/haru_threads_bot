@@ -34,13 +34,26 @@ BALANCE = ('밸런스 게임: 둘 다 달콤하거나 둘 다 괴로워서 진�
 # 조연 등장 회사 에피소드가 상위권. 12:30 참여 코너(빈칸·체크리스트·A/B)와 20:00 질문 없는 위로·일기는 하위권이라 바꿨다.
 LUNCH_CAST = ('점심시간 조연 장면: 다람쥐 동기나 부엉이 부장이 나오는 점심시간의 짧은 장면 하나 (예: 다람쥐 동기의 속닥 소문, '
               '밥 먹으러 나가는 길에 부엉이 부장의 "잠깐 얘기 좀 할까?"). 주말이면 친구 토끼 봄이와의 브런치나 엄마 토끼 전화로. '
-              '마지막 줄은 친구들이 한 줄로 답하기 쉬운 짧은 질문 하나', True, False)
+              '마지막 줄은 한 글자로 답할 수 있는 선택형 질문 (예: "너라면 ① 모른 척 ② 같이 맞장구?")', True, False)
 LUNCH_FRIENDS = ('점심시간 조연 장면: 친구 토끼 봄이나 엄마 토끼한테 점심때 온 카톡·전화 한 장면 (예: 봄이의 신혼 자랑 사진, '
-                 '엄마 토끼의 "좋은 토끼 없니?"). 마지막 줄은 친구들이 한 줄로 답하기 쉬운 짧은 질문 하나', True, False)
+                 '엄마 토끼의 "좋은 토끼 없니?"). 마지막 줄은 한 글자로 답할 수 있는 선택형 질문 (예: "너라면 ① 읽씹 ② 바로 답장?")', True, False)
 EVENING_SAME = ('"이거 나만 그래?" 퇴근 후 공감: 퇴근길이나 집에 와서의 콕 집히는 구체적 장면 하나 (예: 가방 멘 채로 침대에 눕기, '
                 '저녁 메뉴 30분 고민하다 결국 라면). 마지막 줄은 "이거 나만 그래?"나 쉽게 답할 수 있는 한 줄 질문', True, False)
 EVENING_ASK = ('저녁 공감 + 질문: 오늘 회사에서 들고 온 기분이 집에서 터지는 구체적 장면 하나 + 마지막 줄에 '
                '"다들 ~해?"처럼 한 줄로 답하기 쉬운 질문', True, False)
+NIGHT_CHOICE = ('밤의 속마음 + 선택형 질문: 연애·결혼·돈 고민 하나를 털어놓고 마지막 줄은 한 글자로 답할 수 있는 선택형 질문 '
+                '(예: "너라면 ① 지금 연락 ② 내일 아침?")', True, False)
+# 마지막 줄이 선택형 질문이어야 하는 형식 (2026-10-11: 댓글 장벽을 낮춰 반응 신호를 늘리려는 시도)
+CHOICE_FORMATS = tuple(f[0] for f in (LUNCH_CAST, LUNCH_FRIENDS, NIGHT_CHOICE))
+CHOICE_LAST = re.compile(r'(vs|VS|아니면|①|둘 중|1번|[AB]\s*(?:vs|/|\?)|\bA\b.*\bB\b)')
+# 2026-10-11 코너(시리즈): 평일 16:00에 요일마다 고정 코너. 코너 이름으로 글을 시작해야 팔로우할 이유가 생긴다.
+CORNERS = (
+    ('부엉이 부장 어록', '오늘 부엉이 부장이 한 말 한 줄을 큰따옴표로 인용하고 하루의 속마음 번역을 붙여'),
+    ('다람쥐 동기 속보', '다람쥐 동기가 물어 온 회사 소문 한 가지를 속보처럼 전하고 하루의 반응을 붙여'),
+    ('오늘의 퇴사 충동 지수', '오늘 회사에서 있었던 구체적 사건으로 10점 만점 채점 + 한 줄 평'),
+    ('엄마 토끼 전화 어록', '엄마 토끼가 오늘 전화로 한 말 한 줄을 큰따옴표로 인용하고 하루의 속마음 번역을 붙여'),
+    ('칼퇴 카운트다운', '퇴근까지 남은 시간을 구체적 일(회의·메일)에 빗대 세고 하루의 한 줄 평'),
+)
 SLOT_FORMATS = {
     '09:00': (('한숨 공감 한 줄: 출근 전 아침의 콕 집히는 장면 하나 (질문 없이 짧게)', False, False),
               ('"이거 나만 그래?" 아침 공감: 출근 준비의 구체적 장면 + 짧은 질문', True, False)),
@@ -49,7 +62,7 @@ SLOT_FORMATS = {
               ('시리즈 "오늘의 퇴사 충동 지수": 오늘 회사에서 있었던 구체적 사건으로 10점 만점 채점 + 한 줄 평 (질문 없이)', False, False)),
     '20:00': (EVENING_SAME, EVENING_ASK),
     '23:30': (('밤의 속마음: 연애·결혼·돈·인생 고민 하나를 구체적 장면으로 털어놓고 스스로 다독이기 (질문 없이)', False, False),
-              ('밤의 속마음 + 질문: 연애·결혼·돈 고민 하나를 털어놓고 친구들에게 조심스럽게 묻기', True, False)),
+              NIGHT_CHOICE),
 }
 # 마지막 줄이 질문이어야 하는 시각 (주말에도 같은 형식)
 ENDS_WITH_QUESTION = ('12:30', '20:00')
@@ -82,9 +95,9 @@ FALLBACKS = (
 # 시간대 형식에 맞춘 준비된 글 (마지막 줄이 질문). 없는 시각은 FALLBACKS.
 SLOT_FALLBACKS = {
     '12:30': (
-        '점심 먹는데 다람쥐 동기가 "오늘 부장님 기분 별로래" 속닥였어 🥕\n다들 점심때 제일 먼저 듣는 소문 뭐야?',
-        '밥 먹으러 나가는데 부엉이 부장이 "잠깐 얘기 좀 할까?"…\n점심시간에 불리는 거 다들 겪어 봤지?',
-        '점심 먹고 왔더니 다람쥐 동기가 간식을 책상에 두고 갔어 🐿️\n다들 회사에 이런 동기 있어?',
+        '점심 먹는데 다람쥐 동기가 "오늘 부장님 기분 별로래" 속닥였어 🥕\n너라면 ① 모른 척 ② 같이 맞장구?',
+        '밥 먹으러 나가는데 부엉이 부장이 "잠깐 얘기 좀 할까?"…\n너라면 ① 따라간다 ② 밥 먹고 간다고 한다?',
+        '점심 먹고 왔더니 다람쥐 동기가 간식을 책상에 두고 갔어 🐿️\n간식 받으면 ① 바로 먹기 ② 아껴 먹기?',
     ),
     '20:00': (
         '퇴근하고 집 오자마자 가방 멘 채로 침대에 누웠어 🐰\n이거 나만 그래?',
@@ -145,6 +158,35 @@ def issues(text: str, needs_question: bool) -> list[str]:
     if needs_question and '?' not in text:
         found.append('이번 형식은 질문이 필요해요. 물음표가 있는 가벼운 질문을 넣으세요.')
     return found
+
+
+# 첫 줄이 시간·장소 서술이면 스크롤을 못 멈춘다 (2026-10-11: 조회 8~14회 글은 전부 "오후 4시…", "목요일 아침…"으로 시작)
+FLAT_OPENING = re.compile(r'^\s*(오전|오후|아침|점심|저녁|밤|새벽|[월화수목금토일]요일|\d{1,2}시|지금)')
+
+
+def opening_issues(text: str) -> list[str]:
+    lines = text.strip().splitlines()
+    if lines and FLAT_OPENING.match(lines[0]):
+        return ['첫 문장을 시간·요일·장소로 시작하지 말고 인물의 대사나 놀라운 한마디로 시작하세요 (예: 다람쥐 동기가 "…" 했어).']
+    return []
+
+
+def corner_for(now: datetime, slot: str) -> tuple[str, str] | None:
+    """평일 16:00은 요일별 고정 코너 (월=0). 쉬는 날은 없다."""
+    if slot[-5:] != '16:00' or kr_calendar.is_day_off(now.date()):
+        return None
+    return CORNERS[now.weekday() % len(CORNERS)]
+
+
+def corner_issues(text: str, name: str) -> list[str]:
+    return [] if text.strip().startswith(name) else [f'글을 코너 이름 "{name}"으로 시작하세요 (예: "{name}: …").']
+
+
+def choice_issues(text: str) -> list[str]:
+    lines = [line for line in text.strip().splitlines() if line.strip()]
+    if not lines or not CHOICE_LAST.search(lines[-1]):
+        return ['마지막 줄을 한 글자로 답할 수 있는 선택형 질문(예: "① … ② …?" 또는 "A vs B?")으로 끝내세요.']
+    return []
 
 
 def ending_issues(text: str) -> list[str]:
@@ -208,6 +250,9 @@ def compose_persona(llm: LLMClient, model: str, history: Sequence[HistoryEntry],
 
     now = schedule.slot_datetime(slot)
     fmt, needs_question, is_balance = pick_format(now, slot)
+    corner = corner_for(now, slot)
+    if corner:
+        fmt, needs_question = f'시리즈 "{corner[0]}": {corner[1]} (질문 없이, 글은 "{corner[0]}"으로 시작)', False
     recent = [strip_share_lines(e.caption) for e in history if e.seed == KIND and e.caption][-RECENT:]
     user_input = (f'{context_line(now, slot[-5:])}\n이번 형식: {fmt}\n'
                   '최근에 올린 글 (겹치지 않게):\n' + ('\n'.join(f'- {t}' for t in recent) or '(없음)'))
@@ -217,7 +262,9 @@ def compose_persona(llm: LLMClient, model: str, history: Sequence[HistoryEntry],
         result = llm.parse(model, load_prompt('persona'), user_input + extra, PersonaPost)
         text = result.text.strip()
         feedback = (issues(text, needs_question) + kr_calendar.commute_issues(text, now.date()) + (balance_issues(text) if is_balance else [])
-                    + (ending_issues(text) if slot[-5:] in ENDS_WITH_QUESTION else []))
+                    + (ending_issues(text) if slot[-5:] in ENDS_WITH_QUESTION else [])
+                    + (corner_issues(text, corner[0]) if corner else opening_issues(text) if not is_balance else [])
+                    + (choice_issues(text) if fmt in CHOICE_FORMATS else []))
         if not feedback:
             print(f'[하루 글 통과] 시도 {attempt} ({fmt.split(":")[0]})')
             return text, False, result.scene.strip() or FALLBACK_SCENE

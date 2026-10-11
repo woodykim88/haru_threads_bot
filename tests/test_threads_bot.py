@@ -8,14 +8,14 @@ from src.threads import ThreadsClient, ThreadsConfig, ThreadsError
 from tests.helpers import AT_1235, Resp, fake_llm
 
 MODELS = compose.Models('w', 'f')
-GOOD = '점심 당근 두 개 먹고 또 졸려… 이거 식곤증 맞지? 🥕'
+GOOD = '다람쥐 동기가 점심 당근을 두 개나 줬어 🥕\n너라면 ① 낮잠 ② 커피?'
 SLOT = '2026-09-27T12:30'
 
 
 # --- 채널 설정 ---
 
-def test_channel_config_has_five_slots_and_prefix():
-    assert len(channel.MOODS) == 5 and schedule.parse_times(channel.DEFAULT_TIMES) == schedule.parse_times(None)
+def test_channel_config_has_four_slots_and_prefix():
+    assert len(channel.MOODS) == 4 and schedule.parse_times(channel.DEFAULT_TIMES) == schedule.parse_times(None)
     assert notifier.PREFIX == '[Threads 하루] ' and '/haru_stop' in commands.COMMANDS
 
 
@@ -71,6 +71,7 @@ class Graph:
 OK_ROUTES = {'threads_publish': Resp(200, {'id': 'm1'}), '/threads': Resp(200, {'id': 'box'}),
              'm1': Resp(200, {'permalink': 'https://threads/p/1'})}
 ENV = {'PUBLISH_TIMES': channel.DEFAULT_TIMES}
+ENV_WITH_2000 = {'PUBLISH_TIMES': '09:00,12:30,16:00,20:00,23:30'}  # 20:00은 2026-10-11부터 기본에서 빠짐
 
 
 def client(routes):
@@ -181,7 +182,7 @@ def test_image_slot_posts_image_and_text_slot_does_not(monkeypatch):
     monkeypatch.setattr(channel, 'IMAGE_TIMES', ('20:00',))  # 2026-10-10부터 기본은 그림 없음. 켰을 때의 동작을 본다
     d, graph = deps({'PersonaPost': [PersonaPost(text=GOOD, scene='Haru at dinner')]})
     d = post.PostDeps(d.backend, d.models, d.client, make_image=lambda scene, slot: f'https://pub/{slot}.jpg')
-    post.run_post(ENV, d, None, AT_2005)
+    post.run_post(ENV_WITH_2000, d, None, AT_2005)
     creates = [p for m, u, p in graph.calls if u.endswith('/threads')]
     assert creates[0]['media_type'] == 'IMAGE' and creates[0]['image_url'] == 'https://pub/2026-09-27T20:00.jpg'
     assert history.find(history.load_history(), '2026-09-27T20:00').image_urls == ('https://pub/2026-09-27T20:00.jpg',)
@@ -192,7 +193,7 @@ def test_image_failure_falls_back_to_text():
         raise image.ImageError('boom')
     d, graph = deps({'PersonaPost': [PersonaPost(text=GOOD, scene='Haru')]})
     d = post.PostDeps(d.backend, d.models, d.client, make_image=broken)
-    assert post.run_post(ENV, d, None, AT_2005).outcome == 'success'
+    assert post.run_post(ENV_WITH_2000, d, None, AT_2005).outcome == 'success'
     assert [p['media_type'] for m, u, p in graph.calls if u.endswith('/threads')] == ['TEXT']
 
 
@@ -317,7 +318,61 @@ def test_share_line_keeps_question_last_and_has_no_conditional_bait():
 def test_compose_appends_share_line_after_quality_check():
     key = next(f'2026-10-{d:02d}T16:00' for d in range(3, 10) if persona.wants_share_line(f'2026-10-{d:02d}T16:00'))
     text = '부엉이 부장이 "잠깐 얘기 좀 할까?" 하고 10분 동안 당근 얘기만 했어 🐰'
+    corner = persona.corner_for(schedule.slot_datetime(key), key)
+    text = f'{corner[0]}: {text}' if corner else text
     llm, _ = fake_llm({'PersonaPost': [PersonaPost(text=text)]})
     draft = compose.compose(llm, MODELS, (), key)
     assert draft.parts[0].startswith(text) and draft.parts[0].splitlines()[-1] in persona.SHARE_LINES
     assert draft.title == text[:40]
+
+
+# --- 2026-10-11 반응 개선: 대사 훅, 요일 코너, 선택형 질문 ---
+
+def test_flat_opening_is_rejected_but_dialogue_opening_passes():
+    assert persona.opening_issues('오후 4시에 산책 나가려다 말았어')
+    assert persona.opening_issues('목요일 아침, 현관문 앞에서 한참 서 있었어') 
+    assert persona.opening_issues('다람쥐 동기가 "수요일이면 반은 끝난 거지?" 했어') == []
+    assert persona.opening_issues('월요일 아침이라니') and persona.opening_issues('밤 11시 반인데 안 자')
+
+
+def test_weekday_16_has_corner_and_weekend_does_not():
+    names = {persona.corner_for(schedule.slot_datetime(f'2026-10-{d:02d}T16:00'), f'2026-10-{d:02d}T16:00')[0] for d in range(12, 17)}
+    assert len(names) == 5  # 월~금 모두 다른 코너
+    assert persona.corner_for(schedule.slot_datetime('2026-10-10T16:00'), '2026-10-10T16:00') is None  # 토요일
+    assert persona.corner_for(schedule.slot_datetime('2026-10-05T12:30'), '2026-10-05T12:30') is None
+
+
+def test_corner_post_must_start_with_corner_name():
+    key = '2026-10-12T16:00'  # 월요일 → 부엉이 부장 어록
+    bad = PersonaPost(text='부엉이 부장이 "잠깐 얘기 좀 할까?" 했어 🐰')
+    good = PersonaPost(text='부엉이 부장 어록: "잠깐 얘기 좀 할까?" → 번역: 퇴근 못 한다 🐰')
+    llm, client = fake_llm({'PersonaPost': [bad, good]})
+    draft = compose.compose(llm, MODELS, (), key)
+    assert draft.parts[0].startswith('부엉이 부장 어록') and not draft.rescued and len(client.requests) == 2
+    assert '부엉이 부장 어록' in client.requests[0]['input']
+
+
+def test_lunch_requires_choice_question():
+    assert persona.choice_issues('다람쥐 동기가 간식을 줬어\n너라면 ① 먹는다 ② 아낀다?') == []
+    assert persona.choice_issues('다람쥐 동기가 간식을 줬어\n다들 어떻게 해?')
+    flat = PersonaPost(text='다람쥐 동기가 간식을 줬어 🥕\n다들 어떻게 해?')
+    good = PersonaPost(text='다람쥐 동기가 간식을 줬어 🥕\n너라면 ① 먹는다 ② 아낀다?')
+    llm, client = fake_llm({'PersonaPost': [flat, good]})
+    draft = compose.compose(llm, MODELS, (), '2026-10-05T12:30')
+    assert draft.parts == (good.text,) and len(client.requests) == 2
+
+
+def test_outreach_inbox_parsing_and_drafts(tmp_path):
+    from src import outreach
+    inbox = tmp_path / 'inbox.md'
+    inbox.write_text('# 제목\n> 안내\n\n---\n월요일 출근길 최악\n---\n퇴사하고 싶다\n---\n', encoding='utf-8')
+    assert outreach.read_inbox(inbox) == ['월요일 출근길 최악', '퇴사하고 싶다']
+    assert outreach.read_inbox(tmp_path / 'none.md') == []
+    drafts = outreach.CommentDrafts(skip=False, comments=['월요일 출근은 토끼도 귀가 처져 🐰', '30대 여자인 나도 그래', 'https://x.com 놀러 와', 'ㅋ'])
+    assert outreach.usable(drafts.comments) == ['월요일 출근은 토끼도 귀가 처져 🐰']
+    llm, _ = fake_llm({'CommentDrafts': [drafts, outreach.CommentDrafts(skip=True)]})
+    out = tmp_path / 'out.md'
+    result = outreach.run_outreach(llm, 'm', inbox, out)
+    assert result.outcome == 'success' and '- 월요일 출근은 토끼도 귀가 처져' in out.read_text(encoding='utf-8')
+    assert '댓글을 달지 않는' in out.read_text(encoding='utf-8')
+    assert outreach.run_outreach(llm, 'm', tmp_path / 'empty.md', out).outcome == 'skipped'

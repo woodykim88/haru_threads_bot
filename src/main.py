@@ -6,6 +6,7 @@
     refresh-token  Threads 장기 토큰 갱신 (주 1회)
     reply          새 댓글에 하루 말투로 답글 (2시간마다, 하루 최대 20개)
     insights       최근 글 조회수를 읽어 글쓰기 참고(data/performance.md) 갱신 (하루 1번, AI 호출 없음)
+    outreach       data/outreach_inbox.md에 붙여 넣은 남의 글마다 하루 말투 댓글 초안 3개 (output/outreach_drafts.md, 게시는 사람이 직접)
     post-pending   미리 보여 준 글(data/pending.json)을 그대로 게시 (--save-pending으로 만든 것)
 """
 from __future__ import annotations
@@ -20,13 +21,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src import channel, compose, guard, history, image, notifier, performance, post, providers, replies, runlog, schedule, state, token_refresh, usage
+from src import channel, compose, guard, history, image, notifier, outreach, performance, post, providers, replies, runlog, schedule, state, token_refresh, usage
 from src.guard import RunResult
 from src.llm import LLMClient, LLMError
 from src.threads import ThreadsClient, ThreadsConfigError, ThreadsError, load_threads_config
 
 ROOT = Path(__file__).resolve().parent.parent
-JOBS = ('post', 'preview', 'refresh-token', 'post-pending', 'insights', 'reply')
+JOBS = ('post', 'preview', 'refresh-token', 'post-pending', 'insights', 'reply', 'outreach')
 PREVIEW_PATH = ROOT / 'output' / 'preview.txt'
 KNOWN_ERRORS = (providers.ProviderConfigError, ThreadsConfigError, ThreadsError, schedule.ScheduleError,
                 compose.PipelineError, LLMError)
@@ -60,6 +61,8 @@ def run_job(job: str, env: Mapping[str, str], ai: providers.AISettings | None,
             return RunResult('skipped', paused)
         llm = LLMClient(providers.build_text_backend(ai.text_provider, env))
         return replies.run_replies(ThreadsClient(load_threads_config(env)), llm, ai.fast_model, telegram)
+    if job == 'outreach':
+        return outreach.run_outreach(LLMClient(providers.build_text_backend(ai.text_provider, env)), ai.fast_model)
     if job == 'insights':
         return performance.run_insights(ThreadsClient(load_threads_config(env)), datetime.now(schedule.KST))
     if job == 'refresh-token':
@@ -88,7 +91,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     started = datetime.now(schedule.KST)
     ai: providers.AISettings | None = None
     try:
-        if args.job in ('post', 'preview', 'reply'):
+        if args.job in ('post', 'preview', 'reply', 'outreach'):
             ai = providers.load_ai_settings(env)
         result = run_job(args.job, env, ai, telegram, args.slot, args.save_pending)
     except KNOWN_ERRORS as e:
