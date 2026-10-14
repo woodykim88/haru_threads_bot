@@ -7,8 +7,10 @@ from typing import TypeVar
 
 from pydantic import BaseModel
 
+from src import topic_hints
 from src.providers import TextBackend
 
+PERSONA_HINT_USAGE = '요즘 사람들이 신경 쓰는 일이야. 참고 재료일 뿐이고 하루 캐릭터와 시간대 분위기가 우선이야. 토끼 세계 일상 장면으로 자연스럽게 녹일 수 있을 때만 하나 골라 써 (억지면 쓰지 마). 뉴스·숫자·돈 조언·링크는 넣지 마.'
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / 'prompts'
 DEFAULT_MAX_CALLS = 16  # 최악의 경우 화제 1 + 선별 1 + 3주제 x 2회 x (작성+검증) = 14회
 
@@ -51,6 +53,8 @@ def load_prompt(name: str) -> str:
         if PERFORMANCE_PATH.exists():
             text += PERFORMANCE_PATH.read_text(encoding='utf-8')
         text += reference_examples()
+    if name == 'persona':
+        text += topic_hints.brief(topic_hints.load(topic_hints.today_kst()), PERSONA_HINT_USAGE)
     return text
 
 
