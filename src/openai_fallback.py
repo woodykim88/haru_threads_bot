@@ -43,6 +43,15 @@ def is_transient(exc: Exception) -> bool:
     return getattr(exc, 'status_code', None) in TRANSIENT_STATUSES or type(exc).__name__ in TRANSIENT_NAMES
 
 
+FILTER_MARKERS = ('content management policy', 'content_filter', 'content filter')
+
+
+def is_content_filtered(exc: Exception) -> bool:
+    """모델 쪽 콘텐츠 필터(Azure 등)가 이 입력을 거절했는지. 같은 글감으로는 계속 실패하니 다른 글감으로 넘어가야 한다 (2026-10-24)."""
+    text = str(exc).lower()
+    return getattr(exc, 'status_code', None) == 400 and any(m in text for m in FILTER_MARKERS)
+
+
 def _resolve(client: Any, path: tuple[str, ...]) -> Callable[..., Any]:
     target = client
     for name in path:
