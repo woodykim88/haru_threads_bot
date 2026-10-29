@@ -49,13 +49,14 @@ CHOICE_LAST = re.compile(r'(vs|VS|아니면|①|둘 중|1번|[AB]\s*(?:vs|/|\?)|
 # 2026-10-11 코너(시리즈): 평일 16:00에 요일마다 고정 코너. 코너 이름으로 글을 시작해야 팔로우할 이유가 생긴다.
 # 2026-10-30 성과 반영(사용자 승인): 코너 중앙값 엄마 토끼 626 > 퇴사 충동 152 > 칼퇴 136 > 다람쥐 52 > 부엉이 어록 16.
 # 부엉이 부장 어록을 빼고 엄마 토끼를 주 2번(화·목)으로. 월=퇴사 충동(월요병), 금=칼퇴.
-MOM_CALL = ('엄마 토끼 전화 어록', '엄마 토끼가 오늘 전화로 한 말 한 줄을 큰따옴표로 인용하고 하루의 속마음 번역을 붙여')
+MOM_CALL = ('엄마 토끼 전화 어록', '엄마 토끼가 오늘 전화로 한 말 한 줄을 큰따옴표로 인용하고 하루의 속마음 번역을 붙여 (질문 없이)')
 CORNERS = (
-    ('오늘의 퇴사 충동 지수', '오늘 회사에서 있었던 구체적 사건으로 10점 만점 채점 + 한 줄 평'),
+    ('오늘의 퇴사 충동 지수', '오늘 회사에서 있었던 구체적 사건으로 10점 만점 채점 + 한 줄 평. '
+     '마지막 줄은 친구들이 숫자로 답하는 짧은 질문 (예: "친구들은 오늘 몇 점?")'),
     MOM_CALL,
-    ('다람쥐 동기 속보', '다람쥐 동기가 물어 온 회사 소문 한 가지를 속보처럼 전하고 하루의 반응을 붙여'),
+    ('다람쥐 동기 속보', '다람쥐 동기가 물어 온 회사 소문 한 가지를 속보처럼 전하고 하루의 반응을 붙여 (질문 없이)'),
     MOM_CALL,
-    ('칼퇴 카운트다운', '퇴근까지 남은 시간을 구체적 일(회의·메일)에 빗대 세고 하루의 한 줄 평'),
+    ('칼퇴 카운트다운', '퇴근까지 남은 시간을 구체적 일(회의·메일)에 빗대 세고 하루의 한 줄 평 (질문 없이)'),
 )
 SLOT_FORMATS = {
     '09:00': (('한숨 공감 한 줄: 출근 전 아침의 콕 집히는 장면 하나 (질문 없이 짧게)', False, False),
@@ -110,6 +111,9 @@ SLOT_FALLBACKS = {
 }
 # 공유 부탁 줄: 16:00·23:30 글 끝에 코드가 붙인다 (AI가 빼먹지 않게). 조건부 부탁("~하면 ~해 줄게")은 금지.
 # SHARE_EVERY=2 → 날짜 서수 + 시각 순번이 짝수인 글에만 붙여 하루 한 번, 두 시각을 번갈아 간다.
+# 2026-10-30 끔(사용자 승인, 조사 교훈): Meta는 "태그해 줘·리포스트" 같은 직접 부탁을 강등하고 잦으면 프로필 추천을 막는다.
+# 우리 데이터도 부탁 줄 있는 글 중앙값 45 vs 없는 글 50으로 효과가 없었다. 다시 켜려면 True.
+SHARE_ENABLED = False
 SHARE_SLOTS = ('16:00', '23:30')
 SHARE_EVERY = 2
 SHARE_LINES = (
@@ -226,7 +230,7 @@ FALLBACK_SCENE = 'Haru is curled up asleep in a straw blanket, hugging a carrot,
 def wants_share_line(slot: str) -> bool:
     """16:00·23:30 글 중 대략 절반에 공유 줄을 붙입니다 (날짜 기준 결정적 순환, SHARE_EVERY)."""
     hhmm = slot[-5:]
-    if hhmm not in SHARE_SLOTS:
+    if not SHARE_ENABLED or hhmm not in SHARE_SLOTS:
         return False
     from src import schedule
     return (schedule.slot_datetime(slot).toordinal() + SHARE_SLOTS.index(hhmm)) % SHARE_EVERY == 0
@@ -255,7 +259,7 @@ def compose_persona(llm: LLMClient, model: str, history: Sequence[HistoryEntry],
     fmt, needs_question, is_balance = pick_format(now, slot)
     corner = corner_for(now, slot)
     if corner:
-        fmt, needs_question = f'시리즈 "{corner[0]}": {corner[1]} (질문 없이, 글은 "{corner[0]}"으로 시작)', False
+        fmt, needs_question = f'시리즈 "{corner[0]}": {corner[1]} (글은 "{corner[0]}"으로 시작)', False
     recent = [strip_share_lines(e.caption) for e in history if e.seed == KIND and e.caption][-RECENT:]
     user_input = (f'{context_line(now, slot[-5:])}\n이번 형식: {fmt}\n'
                   '최근에 올린 글 (겹치지 않게):\n' + ('\n'.join(f'- {t}' for t in recent) or '(없음)'))

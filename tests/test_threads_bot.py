@@ -293,7 +293,8 @@ def test_evening_compose_retries_when_question_not_last():
     assert draft.parts == (good.text,) and not draft.rescued and len(client.requests) == 2
 
 
-def test_share_line_rotates_daily_between_16_and_2330():
+def test_share_line_rotates_daily_between_16_and_2330(monkeypatch):
+    monkeypatch.setattr(persona, 'SHARE_ENABLED', True)
     days = [f'2026-10-{d:02d}' for d in range(3, 9)]
     for day in days:
         flags = [persona.wants_share_line(f'{day}T{t}') for t in persona.SHARE_SLOTS]
@@ -302,7 +303,8 @@ def test_share_line_rotates_daily_between_16_and_2330():
     assert not any(persona.wants_share_line(f'2026-10-03T{t}') for t in ('09:00', '12:30', '20:00'))
 
 
-def test_share_line_keeps_question_last_and_has_no_conditional_bait():
+def test_share_line_keeps_question_last_and_has_no_conditional_bait(monkeypatch):
+    monkeypatch.setattr(persona, 'SHARE_ENABLED', True)
     key = next(f'2026-10-{d:02d}T23:30' for d in range(3, 10) if persona.wants_share_line(f'2026-10-{d:02d}T23:30'))
     out = persona.with_share_line('잠이 안 와…\n다들 아직 안 자?', key)
     lines = out.splitlines()
@@ -315,7 +317,8 @@ def test_share_line_keeps_question_last_and_has_no_conditional_bait():
     assert persona.with_share_line('그냥 글', off) == '그냥 글'
 
 
-def test_compose_appends_share_line_after_quality_check():
+def test_compose_appends_share_line_after_quality_check(monkeypatch):
+    monkeypatch.setattr(persona, 'SHARE_ENABLED', True)
     key = next(f'2026-10-{d:02d}T16:00' for d in range(3, 10) if persona.wants_share_line(f'2026-10-{d:02d}T16:00'))
     text = '부엉이 부장이 "잠깐 얘기 좀 할까?" 하고 10분 동안 당근 얘기만 했어 🐰'
     corner = persona.corner_for(schedule.slot_datetime(key), key)
@@ -377,3 +380,9 @@ def test_outreach_inbox_parsing_and_drafts(tmp_path):
     assert result.outcome == 'success' and '- 월요일 출근은 토끼도 귀가 처져' in out.read_text(encoding='utf-8')
     assert '댓글을 달지 않는' in out.read_text(encoding='utf-8')
     assert outreach.run_outreach(llm, 'm', tmp_path / 'empty.md', out).outcome == 'skipped'
+
+
+def test_share_line_off_by_default():
+    """2026-10-30: 직접 부탁 줄은 Meta 강등 대상이라 기본으로 끈다."""
+    assert not any(persona.wants_share_line(f'2026-10-{d:02d}T{t}') for d in range(1, 31) for t in ('16:00', '23:30'))
+    assert persona.with_share_line('잠이 안 와…', '2026-10-30T23:30') == '잠이 안 와…'
