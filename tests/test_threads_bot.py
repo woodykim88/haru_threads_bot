@@ -337,19 +337,20 @@ def test_flat_opening_is_rejected_but_dialogue_opening_passes():
 
 def test_weekday_16_has_corner_and_weekend_does_not():
     names = {persona.corner_for(schedule.slot_datetime(f'2026-10-{d:02d}T16:00'), f'2026-10-{d:02d}T16:00')[0] for d in range(12, 17)}
-    assert len(names) == 5  # 월~금 모두 다른 코너
+    assert len(names) == 4  # 2026-10-30부터 엄마 토끼가 화·목 두 번
+    assert '부엉이 부장 어록' not in names
     assert persona.corner_for(schedule.slot_datetime('2026-10-10T16:00'), '2026-10-10T16:00') is None  # 토요일
     assert persona.corner_for(schedule.slot_datetime('2026-10-05T12:30'), '2026-10-05T12:30') is None
 
 
 def test_corner_post_must_start_with_corner_name():
-    key = '2026-10-12T16:00'  # 월요일 → 부엉이 부장 어록
-    bad = PersonaPost(text='부엉이 부장이 "잠깐 얘기 좀 할까?" 했어 🐰')
-    good = PersonaPost(text='부엉이 부장 어록: "잠깐 얘기 좀 할까?" → 번역: 퇴근 못 한다 🐰')
+    key = '2026-10-13T16:00'  # 화요일 → 엄마 토끼 전화 어록
+    bad = PersonaPost(text='엄마 토끼가 "좋은 토끼 없니?" 했어 🐰')
+    good = PersonaPost(text='엄마 토끼 전화 어록: "좋은 토끼 없니?" → 번역: 김장 도와줄 토끼 구함 🐰')
     llm, client = fake_llm({'PersonaPost': [bad, good]})
     draft = compose.compose(llm, MODELS, (), key)
-    assert draft.parts[0].startswith('부엉이 부장 어록') and not draft.rescued and len(client.requests) == 2
-    assert '부엉이 부장 어록' in client.requests[0]['input']
+    assert draft.parts[0].startswith('엄마 토끼 전화 어록') and not draft.rescued and len(client.requests) == 2
+    assert '엄마 토끼 전화 어록' in client.requests[0]['input']
 
 
 def test_lunch_requires_choice_question():
