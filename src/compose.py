@@ -37,4 +37,8 @@ class Draft:
 def compose(llm: LLMClient, models: Models, history: Sequence[HistoryEntry], slot: str) -> Draft:
     text, canned, scene = persona.compose_persona(llm, models.writer, history, slot)
     body = persona.with_share_line(text, slot)  # 16:00·23:30 하루 걸러 공유 줄 (검수 뒤에 붙인다)
-    return Draft(f'{persona.KIND}:{slot}', text.splitlines()[0][:40], (body,), rescued=canned, scene=scene)
+    from src import schedule
+    corner = persona.corner_for(schedule.slot_datetime(slot), slot)
+    # 2026-11-16: 목요일 회의 편은 답글에 CalNote 주소 (첫 글엔 링크를 넣지 않는다)
+    parts = (body, persona.CALNOTE_REPLY) if corner == persona.MEETING and not canned else (body,)
+    return Draft(f'{persona.KIND}:{slot}', text.splitlines()[0][:40], parts, rescued=canned, scene=scene)

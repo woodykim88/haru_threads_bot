@@ -179,7 +179,8 @@ def test_make_image_uses_reference_and_uploads():
 
 
 def test_image_slot_posts_image_and_text_slot_does_not(monkeypatch):
-    monkeypatch.setattr(channel, 'IMAGE_TIMES', ('20:00',))  # 2026-10-10부터 기본은 그림 없음. 켰을 때의 동작을 본다
+    monkeypatch.setattr(channel, 'IMAGE_TIMES', ('20:00',))  # 켰을 때의 동작을 본다
+    monkeypatch.setattr(channel, 'IMAGE_TEST', None)  # 2026-11-16 A/B 기간 제한 없이
     d, graph = deps({'PersonaPost': [PersonaPost(text=GOOD, scene='Haru at dinner')]})
     d = post.PostDeps(d.backend, d.models, d.client, make_image=lambda scene, slot: f'https://pub/{slot}.jpg')
     post.run_post(ENV_WITH_2000, d, None, AT_2005)
@@ -280,7 +281,7 @@ def test_lunch_and_evening_formats_end_with_question():
     lunch = ' '.join(f[0] for f in persona.SLOT_FORMATS['12:30'])
     assert '다람쥐 동기' in lunch and '부엉이 부장' in lunch and not any(w in lunch for w in ('빈칸', '체크리스트', 'A.'))
     assert all('나만 그래' in f[0] or '질문' in f[0] for f in persona.SLOT_FORMATS['20:00'])
-    assert channel.IMAGE_TIMES == ()  # 2026-10-10: 그림 글 조회수가 글만 올린 글의 1/3 이하라 끔
+    assert channel.IMAGE_TIMES == ('16:00',)  # 2026-11-16: 16:00 연재 그림 A/B 시험 (10/10엔 20:00 그림이 약해 껐었다)
     assert persona.ending_issues('퇴근하고 바로 누웠어\n이거 나만 그래?') == []
     assert persona.ending_issues('이거 나만 그래?\n퇴근하고 바로 누웠어')
 
@@ -320,13 +321,14 @@ def test_share_line_keeps_question_last_and_has_no_conditional_bait(monkeypatch)
 def test_compose_appends_share_line_after_quality_check(monkeypatch):
     monkeypatch.setattr(persona, 'SHARE_ENABLED', True)
     key = next(f'2026-10-{d:02d}T16:00' for d in range(3, 10) if persona.wants_share_line(f'2026-10-{d:02d}T16:00'))
-    text = '부엉이 부장이 "잠깐 얘기 좀 할까?" 하고 10분 동안 당근 얘기만 했어 🐰'
+    text = '"잠깐 얘기 좀 할까?" 하더니 10분 동안 당근 얘기만 했어 🐰'
     corner = persona.corner_for(schedule.slot_datetime(key), key)
     text = f'{corner[0]}: {text}' if corner else text
+    expected = persona.number_series(text, corner[0], ()) if corner else text  # 2026-11-16 연재 번호
     llm, _ = fake_llm({'PersonaPost': [PersonaPost(text=text)]})
     draft = compose.compose(llm, MODELS, (), key)
-    assert draft.parts[0].startswith(text) and draft.parts[0].splitlines()[-1] in persona.SHARE_LINES
-    assert draft.title == text[:40]
+    assert draft.parts[0].startswith(expected) and draft.parts[0].splitlines()[-1] in persona.SHARE_LINES
+    assert draft.title == expected[:40]
 
 
 # --- 2026-10-11 반응 개선: 대사 훅, 요일 코너, 선택형 질문 ---
@@ -340,9 +342,10 @@ def test_flat_opening_is_rejected_but_dialogue_opening_passes():
 
 def test_weekday_16_has_corner_and_weekend_does_not():
     names = {persona.corner_for(schedule.slot_datetime(f'2026-10-{d:02d}T16:00'), f'2026-10-{d:02d}T16:00')[0] for d in range(12, 17)}
-    assert len(names) == 4  # 2026-10-30부터 엄마 토끼가 화·목 두 번
+    assert len(names) == 3  # 2026-11-16: 속보·어록 두 연재 + 목요일 회의 편
     assert '부엉이 부장 어록' not in names
-    assert persona.corner_for(schedule.slot_datetime('2026-10-10T16:00'), '2026-10-10T16:00') is None  # 토요일
+    assert persona.corner_for(schedule.slot_datetime('2026-10-10T16:00'), '2026-10-10T16:00') == persona.MOM_CALL  # 토요일
+    assert persona.corner_for(schedule.slot_datetime('2026-10-11T16:00'), '2026-10-11T16:00') is None  # 일요일
     assert persona.corner_for(schedule.slot_datetime('2026-10-05T12:30'), '2026-10-05T12:30') is None
 
 

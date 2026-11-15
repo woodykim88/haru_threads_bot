@@ -25,4 +25,20 @@ MOODS = {
 }
 DEFAULT_TIMES = ','.join(MOODS)
 # 그림을 붙이는 시각 (2026-09-27 사용자 결정: 하루 1장, 20:00). src/image.py
-IMAGE_TIMES: tuple[str, ...] = ()  # 2026-10-10 끔: 그림 붙인 20:00 글 5편이 조회 21~40회, 같은 기간 글만 올린 글 중앙값 약 120회
+# 2026-10-10 끔: 그림 붙인 20:00 글 5편이 조회 21~40회, 같은 기간 글만 올린 글 중앙값 약 120회.
+# 2026-11-16 다시 시험(사용자 승인): 16:00 연재 글에 하루 걸러 그림 (IMAGE_TEST 기간만, 그림 날 vs 글만 날 비교).
+IMAGE_TIMES: tuple[str, ...] = ('16:00',)
+IMAGE_TEST: tuple[str, str] | None = ('2026-11-17', '2026-11-23')  # None이면 IMAGE_TIMES 매일
+
+
+def wants_image(key: str) -> bool:
+    """이 슬롯(예: '2026-11-17T16:00')에 그림을 붙일지. 시험 기간엔 첫날부터 하루 걸러."""
+    from datetime import date
+    if key[-5:] not in IMAGE_TIMES:
+        return False
+    if IMAGE_TEST is None:
+        return True
+    start, end = IMAGE_TEST
+    if not start <= key[:10] <= end:
+        return False
+    return (date.fromisoformat(key[:10]).toordinal() - date.fromisoformat(start).toordinal()) % 2 == 0

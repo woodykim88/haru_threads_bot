@@ -54,7 +54,7 @@ def publish_replies(client: ThreadsClient, parent_id: str, replies: tuple[str, .
 
 def attach_image(deps: PostDeps, draft: compose.Draft, key: str) -> str:
     """그림 슬롯이면 그림을 만들어 주소를 반환합니다. 실패하면 빈 문자열(글만 게시)."""
-    if deps.make_image is None or key[-5:] not in channel.IMAGE_TIMES or not draft.scene:
+    if deps.make_image is None or not channel.wants_image(key) or not draft.scene:
         return ''
     try:
         url = deps.make_image(draft.scene, key)

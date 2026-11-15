@@ -21,7 +21,7 @@ from src.history import HistoryEntry
 from src.llm import LLMClient, load_prompt
 
 KIND = 'persona'
-MIN_CHARS, MAX_CHARS = 8, 200
+MIN_CHARS, MAX_CHARS = 8, 120  # 2026-11-16: 200→120 (짧게, 끝까지 읽히게)
 MAX_ATTEMPTS = 2
 RECENT = 15
 WEEKDAYS = '월화수목금토일'
@@ -49,15 +49,28 @@ CHOICE_LAST = re.compile(r'(vs|VS|아니면|①|둘 중|1번|[AB]\s*(?:vs|/|\?)|
 # 2026-10-11 코너(시리즈): 평일 16:00에 요일마다 고정 코너. 코너 이름으로 글을 시작해야 팔로우할 이유가 생긴다.
 # 2026-10-30 성과 반영(사용자 승인): 코너 중앙값 엄마 토끼 626 > 퇴사 충동 152 > 칼퇴 136 > 다람쥐 52 > 부엉이 어록 16.
 # 부엉이 부장 어록을 빼고 엄마 토끼를 주 2번(화·목)으로. 월=퇴사 충동(월요병), 금=칼퇴.
-MOM_CALL = ('엄마 토끼 전화 어록', '엄마 토끼가 오늘 전화로 한 말 한 줄을 큰따옴표로 인용하고 하루의 속마음 번역을 붙여 (질문 없이)')
-CORNERS = (
-    ('오늘의 퇴사 충동 지수', '오늘 회사에서 있었던 구체적 사건으로 10점 만점 채점 + 한 줄 평. '
-     '마지막 줄은 친구들이 숫자로 답하는 짧은 질문 (예: "친구들은 오늘 몇 점?")'),
-    MOM_CALL,
-    ('다람쥐 동기 속보', '다람쥐 동기가 물어 온 회사 소문 한 가지를 속보처럼 전하고 하루의 반응을 붙여 (질문 없이)'),
-    MOM_CALL,
-    ('칼퇴 카운트다운', '퇴근까지 남은 시간을 구체적 일(회의·메일)에 빗대 세고 하루의 한 줄 평 (질문 없이)'),
-)
+MOM_CALL = ('엄마 토끼 전화 어록', '엄마 토끼가 오늘 전화로 한 말 한 줄을 큰따옴표로 인용하고 하루의 속마음 번역을 붙여. '
+            '번역은 반전 한 방으로 웃기게 (질문 없이)')
+# 2026-11-16 개편(사용자 승인): 팔로워 25명·좋아요 거의 0. 상위 글(어록 317·속보 180/174) 두 연재에 집중하고 번호를 붙인다.
+# 퇴사 충동(122)·칼퇴(36/29)는 뺐다. 목요일은 CalNote(회의 기록 앱) 연결 편.
+SQUIRREL = ('다람쥐 동기 속보', '다람쥐 동기가 물어 온 회사 소문 한 가지를 속보처럼 전하고, 마지막 줄은 반전 한 방 (질문 없이)')
+MEETING = ('부엉이 부장 회의 생존기', '부엉이 부장이 연 회의에서 생긴 일 한 장면 (끝없는 "한 가지만 더", 회의록 누가 쓰나 눈치 싸움, '
+           '10분이라던 회의 1시간 등)을 웃기게, 마지막 줄은 반전 (질문 없이)')
+CORNERS = (SQUIRREL, MOM_CALL, SQUIRREL, MEETING, MOM_CALL)  # 월~금
+SATURDAY_CORNER = MOM_CALL  # 2026-11-14 토 16:00 엄마 토끼 김장 글 215회
+CALNOTE_URL = 'https://apps.apple.com/app/apple-store/id6823021912?pt=129609451&ct=threads_haru&mt=8'
+CALNOTE_REPLY = f'회의록은 앱이 알아서 받아 적게 두고 하루는 듣기만 하는 중 🐰 아이폰 회의 기록 앱 CalNote 👉 {CALNOTE_URL}'
+CAST = ('부엉이 부장', '다람쥐 동기', '엄마 토끼', '봄이')
+# 14일 안에 다시 쓰면 안 되는 소재 묶음 (2026-11-16: 봄이 신혼 이야기가 2주에 4번, 조회 421·18·9·3)
+TOPIC_FAMILIES = {
+    '신혼·결혼 소식': ('신혼', '청첩장', '웨딩', '결혼식', '집 계약', '상견례'),
+    '소개팅·썸': ('소개팅', '썸'),
+    '김장': ('김장',),
+    '빼빼로': ('빼빼로',),
+    '블프·세일 장바구니': ('블프', '블랙프라이데이', '장바구니'),
+    '전기장판': ('전기장판',),
+}
+REPEAT_DAYS = 14
 SLOT_FORMATS = {
     '09:00': (('한숨 공감 한 줄: 출근 전 아침의 콕 집히는 장면 하나 (질문 없이 짧게)', False, False),
               ('"이거 나만 그래?" 아침 공감: 출근 준비의 구체적 장면 + 짧은 질문', True, False)),
@@ -65,7 +78,7 @@ SLOT_FORMATS = {
     '16:00': (('회사 에피소드: 조연(부엉이 부장·다람쥐 동기 등)이 나오는 오늘의 짧은 사건 한 장면 + 하루의 속마음 (질문 없이)', False, False),
               ('시리즈 "오늘의 퇴사 충동 지수": 오늘 회사에서 있었던 구체적 사건으로 10점 만점 채점 + 한 줄 평 (질문 없이)', False, False)),
     '20:00': (EVENING_SAME, EVENING_ASK),
-    '23:30': (('밤의 속마음: 연애·결혼·돈·인생 고민 하나를 구체적 장면으로 털어놓고 스스로 다독이기 (질문 없이)', False, False),
+    '23:30': (('밤의 속마음: 누구나 겪어 본 연애·돈·인생 장면 하나를 털어놓고, 마지막 줄은 자조 섞인 반전으로 피식 웃기게 (질문 없이)', False, False),
               NIGHT_CHOICE),
 }
 # 마지막 줄이 질문이어야 하는 시각 (주말에도 같은 형식)
@@ -179,10 +192,50 @@ def opening_issues(text: str) -> list[str]:
 
 
 def corner_for(now: datetime, slot: str) -> tuple[str, str] | None:
-    """평일 16:00은 요일별 고정 코너 (월=0). 쉬는 날은 없다."""
-    if slot[-5:] != '16:00' or kr_calendar.is_day_off(now.date()):
+    """16:00 연재: 평일은 요일별 고정 코너 (월=0), 토요일은 엄마 토끼, 일요일·평일 공휴일은 없다."""
+    if slot[-5:] != '16:00':
+        return None
+    if now.weekday() == 5:
+        return SATURDAY_CORNER
+    if kr_calendar.is_day_off(now.date()):
         return None
     return CORNERS[now.weekday() % len(CORNERS)]
+
+
+def number_series(text: str, name: str, history: Sequence[HistoryEntry]) -> str:
+    """'어록: …' → '어록 #N: …'. N은 지금까지 올린 같은 연재 수 + 1 (2026-11-16, 연재로 보이게)."""
+    count = sum(1 for e in history if e.seed == KIND and (e.caption or '').startswith(name))
+    rest = text.strip()[len(name):].lstrip()
+    return f'{name} #{count + 1}{rest if rest.startswith(":") else ": " + rest}'
+
+
+def cast_issues(text: str) -> list[str]:
+    names = [n for n in CAST if n in text]
+    return [f'조연은 한 글에 한 명만 ({", ".join(names)} 중 하나만). 처음 보는 친구도 알아듣게.'] if len(names) > 1 else []
+
+
+def punchline_issues(text: str) -> list[str]:
+    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    if lines and re.search(r'[ㅠㅜ]\s*[.!~]*\s*$', lines[-1]):
+        return ['마지막 줄을 한숨(ㅠㅠ)으로 끝내지 말고 반전·과장으로 피식 웃기게 끝내세요.']
+    return []
+
+
+def repeat_issues(text: str, history: Sequence[HistoryEntry], now: datetime) -> list[str]:
+    since = now.date().toordinal() - REPEAT_DAYS
+
+    def recent_enough(slot: str) -> bool:
+        try:
+            return datetime.strptime(slot[:10], '%Y-%m-%d').date().toordinal() > since
+        except ValueError:
+            return False
+
+    recent = ' '.join(e.caption or '' for e in history if e.seed == KIND and recent_enough(e.slot))
+    found = []
+    for family, words in TOPIC_FAMILIES.items():
+        if any(w in text for w in words) and any(w in recent for w in words):
+            found.append(f'"{family}" 소재는 최근 {REPEAT_DAYS}일 안에 이미 썼어요. 다른 장면으로 바꾸세요.')
+    return found
 
 
 def corner_issues(text: str, name: str) -> list[str]:
@@ -271,9 +324,12 @@ def compose_persona(llm: LLMClient, model: str, history: Sequence[HistoryEntry],
         feedback = (issues(text, needs_question) + kr_calendar.commute_issues(text, now.date()) + (balance_issues(text) if is_balance else [])
                     + (ending_issues(text) if slot[-5:] in ENDS_WITH_QUESTION else [])
                     + (corner_issues(text, corner[0]) if corner else opening_issues(text) if not is_balance else [])
-                    + (choice_issues(text) if fmt in CHOICE_FORMATS else []))
+                    + (choice_issues(text) if fmt in CHOICE_FORMATS else [])
+                    + cast_issues(text) + punchline_issues(text) + repeat_issues(text, history, now))
         if not feedback:
             print(f'[하루 글 통과] 시도 {attempt} ({fmt.split(":")[0]})')
+            if corner:
+                text = number_series(text, corner[0], history)
             return text, False, result.scene.strip() or FALLBACK_SCENE
         print(f'[하루 글 탈락] 시도 {attempt}: ' + ' / '.join(feedback))
     return random.Random(slot).choice(SLOT_FALLBACKS.get(slot[-5:], FALLBACKS)), True, FALLBACK_SCENE
